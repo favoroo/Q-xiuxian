@@ -2,7 +2,7 @@ extends Node
 
 ## 祭坛成长线判据（2026-11-02：灵脉阶 + 灵兽分阶 + 血祭），真实 Main 场景，不打 mock。
 ## ① 初始阶：W1 未启动 ⇒ 祭坛 1 阶、渲染器 tier=1
-## ② 血祭：金币 0 + 生命足够 ⇒ HUD 键面「血祭/耗18%」、进充能、爆发后扣 18% 生命、
+## ② 血祭：金币 0 + 生命足够 ⇒ HUD 键面「血祭/耗80%」、进充能、爆发后扣 80% 生命、
 ##    金币不变、启动次数 +1、灵兽出生阶=当前祭坛阶
 ## ③ 晋阶：启动次数跨 3 ⇒ 祭坛 2 阶、渲染器 tier=2、新灵兽出生阶=2
 ## ④ 灵兽出生定格：跨回合阶段/生命上限不变（不再按存活回合晋阶），满寿命消散
@@ -82,7 +82,7 @@ func _case_initial_tier() -> void:
 	_c.check(_obelisk._obelisk_renderer != null and _obelisk._obelisk_renderer.tier == 1,
 		"① 水晶渲染器 tier=1")
 
-## ② 血祭：金币 0、生命足够，键面切血祭；爆发后扣 18% 生命、金币不变、启动次数 +1、灵兽出生阶对
+## ② 血祭：金币 0、生命足够，键面切血祭；爆发后扣 80% 生命、金币不变、启动次数 +1、灵兽出生阶对
 func _case_blood_ritual() -> void:
 	GameManager.obelisk_activations = 1          # 免费档已用过，回到按波收费口径
 	GameManager.spirit_stones = 0
@@ -91,7 +91,7 @@ func _case_blood_ritual() -> void:
 	var blood_cost := GameBalance.obelisk_blood_cost(_player.max_health)
 	_obelisk.is_player_inside = true
 
-	# HUD 键面：金币不足但血够 ⇒ 主文案「血祭」、价格「耗18%」
+	# HUD 键面：金币不足但血够 ⇒ 主文案「血祭」、价格「耗80%」
 	var hud := get_node_or_null("/root/Main/UILayer/GameHUD")
 	var ob_btn: HudObeliskButton = hud._obelisk_widget if hud != null else null
 	_c.check(ob_btn != null, "② 前置：HUD 祭坛键在")
@@ -100,7 +100,7 @@ func _case_blood_ritual() -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		_c.equals(ob_btn.get_btn().text, "血祭", "② 金币不足且血够 ⇒ 键面主文案切「血祭」")
-		_c.equals(ob_btn.get_price_label().text, "耗18%", "② 键面价格写「耗18%」")
+		_c.equals(ob_btn.get_price_label().text, "耗80%", "② 键面价格写「耗80%」")
 
 	_banner_seen = ""
 	_obelisk.start_charge()
@@ -110,7 +110,7 @@ func _case_blood_ritual() -> void:
 	_c.equals(GameManager.spirit_stones, 0, "② 血祭不扣金币")
 	_c.equals(GameManager.obelisk_activations, 2, "② 血祭照常计入启动次数（1→2）")
 	_c.near(_player.current_health, maxf(1.0, hp_before - float(blood_cost)), 0.6,
-		"② 血祭扣 18%% 最大生命（%d）" % blood_cost)
+		"② 血祭扣 80%% 最大生命（%d）" % blood_cost)
 	_c.check(_banner_seen.contains("血祭"), "② 血祭横幅（实得：%s）" % _banner_seen)
 	_c.equals(GameManager.live_allies.size(), 1, "② 血祭爆发后场上 1 只灵兽")
 	if GameManager.live_allies.is_empty():

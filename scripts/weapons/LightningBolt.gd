@@ -30,6 +30,16 @@ const ARC_AFTERGLOW_LIFE := 0.08   ## 余韵窗口（s，迅捷消散，不拖�
 const ARC_AFTERGLOW_LEN := 12.0    ## 单条微弧最大长度（px）
 const ARC_AFTERGLOW_WIDTH := 1.0   ## 微弧线宽（细芯）
 
+## 拴绳弧存活时长（s）：2026-11-07 电刀重做。电刀一闪即收，不留长残影，
+## 也不能长到让玩家看清「这条线其实在空气里」。
+const TRACKED_LIFE := 0.09
+## 单帧寿命消耗上限（s）：卡顿帧/冷启动首帧 delta 可能一次超过整条寿命，
+## 裸 delta 会让电弧「闪都没闪就消失」。
+const MAX_TRACK_STEP := 0.033
+## 光晕层透明度：tint 是不透明的 HDR 色，直接铺成宽线就是一条实心粗带（读起来像粉色绳子）。
+## 光晕只负责边缘泛光，亮度感交给 HDR 芯线。
+const GLOW_ALPHA := 0.38
+
 static var _pool: Array[LightningBolt] = []
 static var _host: Node2D = null
 
@@ -39,6 +49,31 @@ var _line_branch_core: Line2D
 var _afterglow: Array[Line2D] = []
 var _tween: Tween = null
 var _is_pooled: bool = false
+
+# ----------------- 端点拴绳（2026-11-07 电刀重做）-----------------
+## 链电的敌人↔敌人连线必须钉在两只敌人身上：端点每帧按节点实时坐标重算，
+## 敌人被击退/移动时电弧跟着走，敌人一死立刻收线。
+## 旧写法在 activate 当刻把两端坐标拍成快照，敌人一动电弧就留在原地 ——
+## 这正是玩家看到「紫电在空气里飞」的本体。
+## 折线形状只在激活时抽一次（存成「沿程比例 t + 法向偏移 d」），之后每帧按新端点重铺：
+## 既跟着敌人走，又不会因为每帧重随机而糊成一片噪点。
+var _track_a: Node2D = null
+var _track_b: Node2D = null
+var _track_off_a: Vector2 = Vector2.ZERO
+var _track_off_b: Vector2 = Vector2.ZERO
+var _track_trim_a: float = 0.0
+var _track_trim_b: float = 0.0
+## true = 两端沿 a→b 方向各退 trim 半径（体缘对体缘，用于敌人↔敌人连线）；
+## false = 用固定偏移（用于缠身电这类绕体小弧）
+var _track_radial: bool = false
+var _shape_t: PackedFloat32Array = PackedFloat32Array()
+var _shape_d: PackedFloat32Array = PackedFloat32Array()
+var _track_life_left: float = 0.0
+## 逐帧重铺用的工作数组（复用，避免每条拴绳弧每帧 resize 一次）
+var _pts_work: PackedVector2Array = PackedVector2Array()
+## 本帧折线两端的世界坐标（判据读它验证「端点钉在敌人身上」）
+var _track_end_a: Vector2 = Vector2.ZERO
+var _track_end_b: Vector2 = Vector2.ZERO
 
 # ----------------- 池管理 -----------------
 
@@ -72,16 +107,36 @@ static func acquire(parent: Node) -> LightningBolt:
 func _recycle() -> void:
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
+	_clear_tracking()
 	visible = false
 	if _pool.size() < POOL_CAP and is_instance_valid(_host):
 		_pool.append(self)
 	else:
 		queue_free()
 
+## 清空拴绳状态并停掉逐帧跟随（回池/收线共用）
+func _clear_tracking() -> void:
+	_track_a = null
+	_track_b = null
+	_track_off_a = Vector2.ZERO
+	_track_off_b = Vector2.ZERO
+	_track_trim_a = 0.0
+	_track_trim_b = 0.0
+	_track_radial = false
+	_shape_t = PackedFloat32Array()
+	_shape_d = PackedFloat32Array()
+	_track_end_a = Vector2.ZERO
+	_track_end_b = Vector2.ZERO
+	_track_life_left = 0.0
+	set_process(false)
+
 # ----------------- 生命周期与构建 -----------------
 
 func _ready() -> void:
 	_setup_lines()
+	# 脚本里定义了 _process，Godot 入树时会自动开启处理；拴绳弧才需要逐帧重铺，
+	# 普通一次性电弧必须关掉（否则池里每个池体每帧空跑一次 _rebuild_tracked）。
+	set_process(false)
 
 func _setup_lines() -> void:
 	if _line_glow != null:
@@ -133,13 +188,11 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	_setup_lines()
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
+	_clear_tracking()
 
 	global_position = from_pos
 	var main_points := _build_jagged_points(from_pos, to_pos)
 	var is_crowded := FxBudget.crowded
-	# 竖直落雷标记（2026-11-01 全竖直口径）：两端同 x 且自上而下即为「竖直天雷」。
-	# 只为判据留读数（super_vfx_check 钉「雷只许竖劈，不许斜劈/上劈」），不影响任何绘制。
-	set_meta(&"vertical_hop", is_equal_approx(from_pos.x, to_pos.x) and to_pos.y > from_pos.y)
 	var glow_active := bool(SettingsManager.get_val(&"display", &"glow", true)) and not bool(SettingsManager.get_val(&"display", &"glow_auto_off", false))
 
 	# 主干赋值：glow 关闭时隐藏光晕层（无 bloom 时宽半透明多边形只白耗带宽）
@@ -194,6 +247,168 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 		_tween.tween_callback(_spawn_afterglow)
 	else:
 		_tween.tween_callback(_after_afterglow)
+
+## 拴绳弧专用「白热芯」色（2026-11-07）：在 tint 色相基础上向白大幅提亮。
+## 旧口径 _core_color_for 只把最亮分量抬到 CORE_HDR_PEAK、色相不变 —— 紫电得到的是
+## 一条**饱和紫**的实心线，混战里读作「紫色绳子」而不是闪电。
+## 闪电的读法是「白热芯 + 边缘泛色」，所以这里把芯色向白推 CORE_WHITEN_RATIO：
+## 保留 tint 的色相倾向（紫电偏紫、雷劫偏绯），但主亮度靠白。
+const CORE_WHITEN_RATIO := 0.62
+static func _hot_core_color(tint_col: Color, glow_active: bool) -> Color:
+	var max_c := maxf(tint_col.r, maxf(tint_col.g, tint_col.b))
+	var base := Color(1.0, 1.0, 1.0, 1.0)
+	if max_c > 0.001:
+		base = Color(tint_col.r / max_c, tint_col.g / max_c, tint_col.b / max_c, 1.0)
+	var hot := base.lerp(Color(1.0, 1.0, 1.0, 1.0), CORE_WHITEN_RATIO)
+	if not glow_active:
+		return hot
+	# HDR 档：整体抬到超白区间，靠 bloom 起辉（色相随白化后仍带一点 tint 倾向）
+	var peak := maxf(hot.r, maxf(hot.g, hot.b))
+	if peak <= 0.001:
+		return CORE_COLOR
+	var k: float = CORE_HDR_PEAK / peak
+	return Color(hot.r * k, hot.g * k, hot.b * k, 1.0)
+
+## 拴绳激活（2026-11-07 紫电电刀重做）：电弧两端钉在两个节点上，逐帧按实时坐标重铺折线。
+## 这是「电只在敌人身上 / 敌人之间」的唯一实现方式 —— 旧 activate 把两端坐标拍成快照，
+## 敌人被击退或移动后电弧就悬在原地，玩家读作「紫电在空气里飞」。
+##
+## a / b：两端锚点节点，必须有效（可为同一只敌人 = 缠身电）。
+##   不接受 null：Godot 在节点被释放后会把 Lambda/变量里的引用换成 null，
+##   若把 null 当成「静态世界坐标」，敌人一死电弧反而永远不收（这正是「残线留在空气里」）。
+## off_a / off_b：锚点偏移（节点坐标系内的常向量，缠身电用它把端点收在身体半径内）。
+## trim_a / trim_b：沿 a→b 方向各退的像素（radial=true 时用，让连线从体缘起、到体缘止）。
+## radial=true：偏移按「a→b 方向」解释为退让量（敌人↔敌人连线）；
+## radial=false：偏移按固定常向量解释（缠身电绕体小弧）。
+## 折线形状（沿程比例 + 法向偏移）只在激活时抽一次，之后每帧按新端点重铺 ——
+## 既跟着敌人走，又不会每帧重随机糊成噪点。
+## 端点任一失效（敌人被打死 / 出树）立刻收线回池，绝不留残线。
+## 任一锚点为 null 时直接返回 false（调用方不必画）—— 宁可少画一道，也不画无主的线。
+func activate_tracked(a: Node2D, b: Node2D, off_a: Vector2, off_b: Vector2,
+		trim_a: float, trim_b: float, radial: bool, tint_col: Color,
+		width_mult: float = 1.0, core_tint: Color = Color(0, 0, 0, 0)) -> bool:
+	if a == null or b == null or not is_instance_valid(a) or not is_instance_valid(b):
+		return false
+	_setup_lines()
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	_clear_tracking()
+
+	_track_a = a
+	_track_b = b
+	_track_off_a = off_a
+	_track_off_b = off_b
+	_track_trim_a = trim_a
+	_track_trim_b = trim_b
+	_track_radial = radial
+
+	var pa := _anchor_world(a, off_a)
+	var pb := _anchor_world(b, off_b)
+	var dist := pa.distance_to(pb)
+	# 折线形状：段长 10px（比旧 14px 更细碎，闪电的折点是密集的，不是一条波浪）。
+	# 抖幅分两层：低频大摆（sin 包络压两端，保证端点点位不动）+ 高频小抖（每一折都变向）——
+	# 只有低频会读成「粉色绳子」，只有高频会读成「毛刺」，两层叠起来才是电击穿轮廓。
+	# 抖幅必须**随机正负**（旧写法 envelope*0.75 恒为正 ⇒ 整条线朝一侧鼓成平滑弧）。
+	var amp := clampf(dist * 0.22, 4.0, 11.0)
+	var segs := maxi(int(dist / 10.0), 6)
+	for i in range(segs + 1):
+		var t := float(i) / float(segs)
+		var d := 0.0
+		if i > 0 and i < segs:
+			var envelope := sin(t * PI)
+			d = (randf_range(-amp, amp) * envelope) + randf_range(-amp * 0.35, amp * 0.35)
+		_shape_t.append(t)
+		_shape_d.append(d)
+
+	global_position = pa
+	var glow_active := _glow_enabled()
+	_line_glow.width = BASE_WIDTH_GLOW * width_mult
+	# 光晕层必须是**低透明度**柔光（GLOW_ALPHA），不能直接用 tint ——
+	# tint 是不透明的 HDR 色，直接铺上去就是一条实心粗带，读起来像粉色绳子而不是闪电。
+	# 亮度感交给芯线（_hot_core_color 抬到 CORE_HDR_PEAK），光晕只负责边缘泛光。
+	_line_glow.default_color = Color(tint_col.r, tint_col.g, tint_col.b, GLOW_ALPHA)
+	_line_glow.visible = glow_active
+	var core_c: Color
+	if core_tint.a > 0.0:
+		core_c = core_tint
+	else:
+		core_c = _hot_core_color(tint_col, glow_active)
+	_line_core.visible = true
+	_line_core.width = BASE_WIDTH_CORE * width_mult
+	_line_core.default_color = core_c
+	# 拴绳弧一律不甩分支与余韵（那是「空气里也有电」的来源）
+	_line_branch_core.visible = false
+	for arc_line in _afterglow:
+		arc_line.visible = false
+		arc_line.default_color = core_c
+
+	_rebuild_tracked()
+	modulate.a = 1.0
+	visible = true
+	_track_life_left = TRACKED_LIFE
+	set_process(true)
+	return true
+
+func _process(delta: float) -> void:
+	# 寿命自己累计，不用 Tween：拴绳弧本来就要逐帧重铺折线，顺手把淡出也算在这里。
+	# 单帧 delta 钳到 MAX_TRACK_STEP —— 卡顿帧/首帧启动时 delta 可能一次就超过整条寿命，
+	# 用裸 delta 会让电弧「闪都没闪就消失」（headless 与冷启动都踩到过）。
+	_track_life_left -= minf(delta, MAX_TRACK_STEP)
+	if _track_life_left <= 0.0:
+		_after_afterglow()
+		return
+	_rebuild_tracked()
+	modulate.a = clampf(_track_life_left / TRACKED_LIFE, 0.0, 1.0)
+
+## 每帧按两端实时坐标重铺折线；任一端失效立刻收线（不留空气残线）
+func _rebuild_tracked() -> void:
+	if _shape_t.is_empty():
+		set_process(false)
+		return
+	if not _anchor_alive(_track_a) or not _anchor_alive(_track_b):
+		_after_afterglow()
+		return
+	var pa := _anchor_world(_track_a, _track_off_a)
+	var pb := _anchor_world(_track_b, _track_off_b)
+	var dir := pb - pa
+	if _track_radial and dir.length_squared() > 0.0001:
+		var n := dir.normalized()
+		pa += n * _track_trim_a
+		pb -= n * _track_trim_b
+		dir = pb - pa
+	var side := dir.orthogonal().normalized()
+	var base := pa - global_position
+	# 工作数组按需长到形状长度（拴绳弧存活 90ms，重铺十几次，别每帧 resize 一个新 PackedVector2Array）
+	if _pts_work.size() != _shape_t.size():
+		_pts_work.resize(_shape_t.size())
+	for i in range(_shape_t.size()):
+		_pts_work[i] = base + dir * _shape_t[i] + side * _shape_d[i]
+	_line_core.points = _pts_work
+	if _line_glow.visible:
+		_line_glow.points = _pts_work
+	# 两端实际落点读数（判据用：端点必须钉在锚点身上）。用成员变量而不是 set_meta ——
+	# 每帧写 meta 会连带分配一个 Array，拴绳弧同屏十几条时就是纯垃圾。
+	_track_end_a = pa
+	_track_end_b = pb
+
+## 锚点有效性：两端都必须是在树的有效节点。**参数不标类型** —— 已释放的实例传给
+## `Node2D` 形参会直接抛 "previously freed is not a subclass of the expected argument class"，
+## 而这个函数恰恰就是用来判定「锚点是否已释放」的（敌人被击杀出树时走到这里）。
+## 注意 null 也必须判死：Lambda 捕获的节点被释放后，Godot 会把它换成 null 再传进来
+## （"Lambda capture at index 1 was freed. Passed null instead."）——
+## 旧写法把 null 当成「用固定世界坐标当锚点」，结果敌人一死电弧反而永远不收。
+static func _anchor_alive(n) -> bool:
+	return n != null and is_instance_valid(n) and (n as Node2D).is_inside_tree()
+
+## 锚点世界坐标：调用前必须已过 _anchor_alive；参数同样不标类型
+static func _anchor_world(n, off: Vector2) -> Vector2:
+	if n == null or not is_instance_valid(n):
+		return off
+	return (n as Node2D).global_position + off
+
+static func _glow_enabled() -> bool:
+	return bool(SettingsManager.get_val(&"display", &"glow", true)) \
+		and not bool(SettingsManager.get_val(&"display", &"glow_auto_off", false))
 
 ## 主干已淡出，从命中点向四周散 2 条微型电弧（细芯，0.15s 渐隐），演完回池。
 ## 微弧线与主干同为本节点子线、共享局部坐标系：origin 直接取主干折线末点（命中端）局部坐标。

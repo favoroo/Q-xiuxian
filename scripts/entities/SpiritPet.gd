@@ -25,8 +25,11 @@ var _age: float = 0.0
 var _cooldown_timer: float = 0.8    ## 首跳延迟 0.8 秒，平稳入场
 var _dying: bool = false
 var _action_fx: float = -1.0        ## 脉冲/动作特效进度（0~1，<0 为无）
-var _lightning_target_pos: Vector2 = Vector2.ZERO ## 雷击主目标终点（本地坐标）
-var _chain_targets_pos: Array[Vector2] = []       ## 雷击连锁分支目标终点（本地坐标）
+## 雷击主目标：存**节点引用**逐帧锚定（2026-11-07 与紫电同口径）。
+## 旧写法在触发当刻 to_local 拍一份本地坐标快照 —— 灵兽每帧都在绕玩家飞，
+## 快照偏移不变 ⇒ 线的终点在世界里跟着宠物漂，敌人却没动，雷线整段拖离敌人飘在空气里。
+var _lightning_target: Node2D = null
+var _chain_targets: Array[Node2D] = [] ## 雷击连锁分支目标（同样逐帧锚定）
 var _spit_dir: Vector2 = Vector2.ZERO             ## 聚宝蟾吐金宝朝向（本地坐标，供吐宝扇芒绘制）
 var _fire_dir: Vector2 = Vector2.ZERO             ## 焰灵狐吐火朝向（本地坐标，供喷射扇焰绘制）
 
@@ -103,8 +106,8 @@ func _physics_process(delta: float) -> void:
 		_action_fx += delta * 2.8
 		if _action_fx > 1.0:
 				_action_fx = -1.0
-				_lightning_target_pos = Vector2.ZERO
-				_chain_targets_pos.clear()
+				_lightning_target = null
+				_chain_targets.clear()
 				_spit_dir = Vector2.ZERO
 				_fire_dir = Vector2.ZERO
 				_custom_fx_type = ""
@@ -249,8 +252,8 @@ func _act_leique() -> void:
 	if nearest.has_method("apply_vortex_pin"):
 		nearest.apply_vortex_pin(Vector2.ZERO, BalanceSpiritPet.THUNDER_STUN_DURATION)
 
-	_lightning_target_pos = to_local(nearest.global_position)
-	_chain_targets_pos.clear()
+	_lightning_target = nearest
+	_chain_targets.clear()
 
 	# 2. 连锁神雷：向最近的 1~2 个敌人弹射
 	var chain_dmg := primary_dmg * BalanceSpiritPet.THUNDER_CHAIN_RATIO
@@ -268,7 +271,7 @@ func _act_leique() -> void:
 				OnHitEffects.on_pet_hit(self, n2d, chain_dmg)
 			if e.has_method("apply_vortex_pin"):
 				e.apply_vortex_pin(Vector2.ZERO, BalanceSpiritPet.THUNDER_STUN_DURATION * 0.75)
-			_chain_targets_pos.append(to_local(n2d.global_position))
+			_chain_targets.append(n2d)
 			chained += 1
 			if chained >= BalanceSpiritPet.THUNDER_CHAIN_MAX:
 				break
@@ -548,14 +551,20 @@ func _draw() -> void:
 
 		# 6. 行动与专属特效（按灵兽各自特征绘制，2026-10-20 七只统一打磨）
 		if _action_fx >= 0.0:
-			if _lightning_target_pos != Vector2.ZERO:
+			# 雷灵雀连锁神雷：终点逐帧读目标实时坐标（2026-11-07 与紫电同口径）。
+			# 目标死了/出树 → 返回 INF ⇒ 该段不画（宁可少画，也不把线留在空气里）；
+			# 某个连锁目标单独死亡只跳那一环，其余分支照画。
+			var main_pos := _tracked_local(_lightning_target)
+			if main_pos != Vector2.INF:
 				# 主雷电电弧
-				_draw_lightning_arc(Vector2.ZERO, _lightning_target_pos, 1.0 - _action_fx)
+				_draw_lightning_arc(Vector2.ZERO, main_pos, 1.0 - _action_fx)
 				# 连锁分支电弧
-				for cp in _chain_targets_pos:
-					_draw_lightning_arc(_lightning_target_pos, cp, (1.0 - _action_fx) * 0.8)
+				for e in _chain_targets:
+					var cp := _tracked_local(e)
+					if cp != Vector2.INF:
+						_draw_lightning_arc(main_pos, cp, (1.0 - _action_fx) * 0.8)
 				# 命中点十字闪光（雷灵雀专属）
-				_draw_fx_thunder_hit(_lightning_target_pos, 1.0 - _action_fx)
+				_draw_fx_thunder_hit(main_pos, 1.0 - _action_fx)
 			elif _custom_fx_type == "wind_vortex":
 				# 灵风气旋双螺旋 + 外圈风刃刻线
 				var wind_r: float = lerpf(core_r * 1.5, core_r * 4.2, _action_fx)
@@ -695,6 +704,14 @@ func _draw_fx_wind_blades(radius: float, alpha: float) -> void:
 		var p0: Vector2 = Vector2(cos(a), sin(a)) * radius
 		var p1: Vector2 = Vector2(cos(a + 0.35), sin(a + 0.35)) * (radius * 0.72)
 		draw_line(p0, p1, Color(0.9, 0.96, 1.0, alpha * 0.8), 1.6)
+
+## 逐帧锚定的目标本地坐标（2026-11-07 紫电同口径）：节点有效且在树才返回实时位置，
+## 否则返回 INF 表示「这段不画」。宁可不画，也不把线钉在触发当刻的快照上 ——
+## 灵兽每帧都在飞，快照终点会跟着宠物漂离敌人身体，正是「雷线飘在空气里」的来源。
+func _tracked_local(e: Node2D) -> Vector2:
+	if e == null or not is_instance_valid(e) or not e.is_inside_tree():
+		return Vector2.INF
+	return to_local(e.global_position)
 
 func _draw_lightning_arc(start_pt: Vector2, end_pt: Vector2, alpha: float) -> void:
 	var mid := (start_pt + end_pt) * 0.5

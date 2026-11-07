@@ -253,9 +253,10 @@ func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) ->
 			_target_cloak_shimmer = 0.7 * intensity
 			_target_sigil_boost = 0.5 * intensity
 			_target_motes_boost = 0.75 * intensity
-		"dash": # 缩地成寸：瞬身纯白剑意锋芒爆闪、斗篷极速流光
-			_target_eye_color = Color(1.0, 1.0, 1.0, 1.0)
-			_target_eye_boost = 1.25 * intensity
+		"dash": # 闪避：瞬身剑意锋芒爆闪、斗篷极速流光（眼睛不再换色/爆芒：
+			# 落地后 1 秒必暴窗口里一直白亮发光太抢眼，2026-11-07 用户反馈去掉）
+			_target_eye_color = Color.TRANSPARENT
+			_target_eye_boost = 0.0
 			_target_cloak_color = Color(1.0, 0.95, 0.8, 1.0)
 			_target_cloak_shimmer = 1.2 * intensity
 			_target_sigil_boost = 0.85 * intensity

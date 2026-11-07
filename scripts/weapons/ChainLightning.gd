@@ -9,9 +9,13 @@ extends RefCounted
 ## 2026-10-27 电刀化（对标英雄联盟电刀）：旧写法每段都画「cursor → 敌人」的全长穿越线，
 ## 雷劫/反震/血海还从尸体/玩家坐标起跳，再叠 LightningBolt 的分支与空气余韵 ——
 ## 玩家看到的是一屏没有归属的乱线。
-## 2026-11-01 全竖直落雷：每跳只在目标头顶竖劈一道雷（HOP_BOLT_DROP），
-## 敌人↔敌人之间的斜向穿越弧整段下线 —— 用户口径「雷只能从上往下劈，不要斜劈、不要从下往上劈」。
-## 传导感由逐跳延时表达（一道接一道劈在下一只怪头上），落点再炸缠身电。
+## 2026-11-07 电刀彻底重做（用户口径「紫电在空气里飞来飞去，空气里也有闪电，很乱」）：
+## 2026-11-01 那版「头顶竖劈」的雷柱，顶端悬在敌人上方 78px 的空气里、下端才碰到怪 ——
+## 它本身就是「空气里的闪电」。现在一律拴在敌人身上，只剩两种图形：
+##   ① 落点缠身电：短弧两端都收在这只敌人的身体半径内（绕体闪，不出体）；
+##   ② 敌人↔敌人连线：弧的两端钉在两只敌人的体缘上，且逐帧跟随
+##      （LightningBolt.activate_tracked）—— 敌人被击退时电弧跟着走，敌人一死立刻收线，
+##      绝不留残线悬在空中。
 ## 端点一律在画线当刻读敌人实时坐标，延时拍里敌人移动也不会把雷留在空气里。
 ## 命中跳字走 take_damage 的 chain_tint 通道（独立条 + 身份色），不并进武器主跳字。
 ##
@@ -34,25 +38,23 @@ static var _last_event_ms: int = -999999
 static var _last_gate_ms: Dictionary = {}
 static var _depth: int = 0
 
-## 逐跳落雷的竖直落差：雷只许自头顶竖直劈到身位，落差就是这个高度
-## （2026-11-01 用户口径「雷只能从上往下劈，不要斜劈、不要从下往上劈」）。
-## 与 JuiceEffect.SKY_STRIKE_HEIGHT(58) 同档略高：同为贴身材质的光柱/电弧，不拉空气长线。
-const HOP_BOLT_DROP := 78.0
 ## 逐跳演出的间隔（秒）：电一跳一跳传导的节拍。只延迟画图，伤害在 strike 当帧即时结算
 const HOP_VISUAL_DELAY := 0.045
 ## 链电弧线宽倍率（LightningBolt 基准 ×1.15：0.85 的旧口径在混战里细得看不见）
 const BOLT_WIDTH := 1.15
+## 敌人↔敌人连线的体缘退让：连线两端各从身位中心退到这个距离，弧从体缘起、到体缘止。
+## 取 12px ≈ 小怪身体半径量级 —— 弧不穿进身体，也不会缩到看不见。
+const LINK_EDGE_TRIM := 12.0
 
 ## 从 from_pos 发起一次链电：首跳永远落在「触发的敌人」身上，之后逐跳找最近未打过的敌人。
-## 电刀模式（2026-10-27 重做，对标 LOL 电刀）：
-##   - 每一跳都只在那只敌人头顶竖直劈一道雷（2026-11-01 改为全竖直）：
-##     不再画敌人↔敌人之间的斜向穿越弧 —— 旧写法两端任意角度，玩家看到的
-##     是「从四面八方劈来、还有从下往上劈的」一屏乱线。
+## 电刀模式（2026-11-07 最终口径，对标 LOL 电刀）：
+##   - 电只在两处出现：**敌人身上**（缠身电）与**敌人↔敌人的连线上**（体缘连线弧）。
+##     空气里一条线都不许有 —— 天空竖雷柱（顶端悬空）与中段随机分支/余韵整段下线。
 ##   - first_target 有效 = 触发的敌人（紫电/雷霆弹幕/兽群）。玩家/武器/尸体绝不在空气里甩线。
 ##   - first_target 为 null（雷劫/反震/血海）：由 from_pos 就近锁定第一只敌人当首跳，
 ##     from_pos 不参与画线；半径内锁不到敌人时直接返回 0（宁可不画，也不画空气）。
-##   - 后续每跳只画「敌人↔敌人」中心的传导弧（allow_branch=false：不甩中段分支/空气余韵），
-##     弧落到的敌人身上再炸一簇缠身电。
+##   - 连线弧两端拴在两只敌人身上（LightningBolt.activate_tracked）：敌人移动时弧跟着走，
+##     敌人一死立刻收线，不会把线留在原地。
 ## damage 是首跳伤害（后续跳按 BalanceChain.HOP_RATIO 折损）。
 ## max_hops 传 0 用 BalanceChain.MAX_HOPS。
 ## gate：演出闸的路径键（每路雷电各持一条，见文件头）；sfx 传空串用默认雷击音。
@@ -85,39 +87,57 @@ static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: 
 	# 与传导弧同吃演出闸：一次雷劫风暴只放一团，伤害结算不受影响。
 	if draw_bolt and gate == &"leijie":
 		FxFlipbookPool.play(&"zap_hit", from_pos)
-	# 首跳：头顶竖直落雷 + 缠身电（电刀触发瞬间「雷劈在这只怪身上」）
-	_apply_hop_hit(host, targets[0], damage, 0, bolt_tint, draw_bolt)
-	# 后续逐跳：每跳都只在目标头顶竖劈一道雷 + 落点缠身电。位置在画线那一刻才读敌人
-	# 实时坐标 —— 延时拍里敌人被击退/移动，雷也不会留在空气里（旧写法用选目标时的快照坐标）。
+	# 首跳：缠身电（电刀触发瞬间「电缠在这只怪身上」），没有上一跳 → 不画连线
+	_apply_hop_hit(host, targets[0], null, damage, 0, bolt_tint, draw_bolt)
+	# 后续逐跳：敌人↔敌人连线弧 + 落点缠身电。连线两端拴在两具身体上（activate_tracked），
+	# 延时拍里敌人被击退/移动时弧跟着走，敌人一死立刻收线 —— 绝不留线在空气里。
 	for i in range(1, targets.size()):
 		var enemy: Node2D = targets[i]
+		var prev_enemy: Node2D = targets[i - 1]
 		var hop_idx: int = i
 		var tree := host.get_tree()
 		if tree == null:
-			_apply_hop_hit(host, enemy, damage, hop_idx, bolt_tint, draw_bolt)
+			_apply_hop_hit(host, enemy, prev_enemy, damage, hop_idx, bolt_tint, draw_bolt)
 			continue
 		var delay: float = HOP_VISUAL_DELAY * float(hop_idx)
 		tree.create_timer(delay).timeout.connect(func() -> void:
 			if host == null or not is_instance_valid(host):
 				return
-			_apply_hop_hit(host, enemy, damage, hop_idx, bolt_tint, draw_bolt))
+			_apply_hop_hit(host, enemy, prev_enemy, damage, hop_idx, bolt_tint, draw_bolt))
 	return targets.size()
 
-## 竖直落雷（2026-11-01 全竖直口径）：从目标头顶 HOP_BOLT_DROP 处竖直劈到身位中心。
-## 只画主干、不甩分支与空气余韵（allow_branch=false）；两端都锚在目标身上，
-## 高度与贴身光柱同档，绝不出现「空气里一道斜线」。
-static func _draw_hop_bolt(host: Node, pos: Vector2, tint: Color) -> void:
+## 敌人↔敌人连线弧（2026-11-07 电刀最终口径）：两端各从身位中心退到体缘，
+## 弧从体缘起、到体缘止；两端都拴在敌人节点上逐帧跟随（LightningBolt.activate_tracked）。
+## 这是全项目唯一允许「离开敌人身体」的链电图形 —— 它的两端仍然钉在两只敌人身上。
+## 两只怪贴得比两边体缘之和还近时不画：这时体缘已经贴在一起，弧会退成反向/零长的小毛刺。
+static func _draw_hop_link(host: Node, prev_enemy: Node2D, enemy: Node2D, tint: Color) -> void:
+	var trim_a: float = _body_radius_of(prev_enemy)
+	var trim_b: float = _body_radius_of(enemy)
+	if prev_enemy.global_position.distance_to(enemy.global_position) < trim_a + trim_b + 6.0:
+		return
 	var bolt := LightningBolt.acquire(host)
 	if bolt == null:
 		return
-	bolt.activate(pos + Vector2(0.0, -HOP_BOLT_DROP), pos, tint,
-		BOLT_WIDTH, Color(0, 0, 0, 0), false)
+	bolt.activate_tracked(prev_enemy, enemy, Vector2.ZERO, Vector2.ZERO,
+		trim_a, trim_b, true, tint, BOLT_WIDTH)
 
-## 一次链跳的落地结算：伤害（带链电身份色跳字）+ 竖直落雷 + 缠身电 + 落点爆闪。
+## 敌人的身体半径（读 CollisionShape2D 的圆半径；拿不到时退回缠身电的默认半径）。
+## 走鸭类型 + get_node_or_null：严禁类型化引用 EnemyBase（项目坑 12），
+## 也兼容非 EnemyBase 的可受伤实体（交互物不进链电目标表，这里只是兜底）。
+static func _body_radius_of(e: Node2D) -> float:
+	if e == null or not is_instance_valid(e):
+		return LINK_EDGE_TRIM
+	var cs := e.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if cs != null and cs.shape is CircleShape2D:
+		return (cs.shape as CircleShape2D).radius
+	return LINK_EDGE_TRIM
+
+## 一次链跳的落地结算：伤害（带链电身份色跳字）+ 缠身电 + 落点爆闪；
+## prev_enemy 非空时再补一道「上一只 → 这一只」的体缘连线弧。
 ## 命中点读敌人实时坐标；目标已死则整跳跳过（伤害与画面一起跳过，不往空气里画）。
-## 画面上「传导」由逐跳延时（HOP_VISUAL_DELAY）表达：雷一道接一道劈在下一只怪头上。
-static func _apply_hop_hit(host: Node, enemy: Node2D, base_damage: float, hop_idx: int,
-		tint: Color, draw_bolt: bool) -> void:
+## 画面上「传导」由逐跳延时（HOP_VISUAL_DELAY）表达：电一跳一跳打到下一只怪身上。
+static func _apply_hop_hit(host: Node, enemy: Node2D, prev_enemy: Node2D, base_damage: float,
+		hop_idx: int, tint: Color, draw_bolt: bool) -> void:
 	if enemy == null or not is_instance_valid(enemy) or bool(enemy.get("dying")):
 		return
 	if _depth >= BalanceChain.MAX_DEPTH:
@@ -131,8 +151,11 @@ static func _apply_hop_hit(host: Node, enemy: Node2D, base_damage: float, hop_id
 		enemy.take_damage(dmg, Vector2.ZERO, false, false, tint)
 	_depth = maxi(0, _depth - 1)
 	if draw_bolt and host != null and is_instance_valid(host):
-		_draw_hop_bolt(host, pos, tint)
-		JuiceEffect.spawn_body_arcs(host, pos, tint)
+		# 连线先画（在两只身体之间），再画落点缠身电（压在体表）
+		if prev_enemy != null and is_instance_valid(prev_enemy) and not bool(prev_enemy.get("dying")):
+			_draw_hop_link(host, prev_enemy, enemy, tint)
+		JuiceEffect.spawn_body_arcs(host, pos, tint, JuiceEffect.BODY_ARC_RADIUS,
+			JuiceEffect.BODY_ARC_COUNT, enemy)
 		JuiceEffect.spawn_bolt_pop(host, pos, tint)
 
 ## 单点落雷（天罚用）：伤害锁死被暴击的目标，在它身位上亮一道贴身光柱。

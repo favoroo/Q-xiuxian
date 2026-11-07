@@ -22,8 +22,10 @@ extends Node
 ##   ⑩ 全链路去线条化（2026-11-01）：ThunderBurst 不再立 200px 天空雷柱 + 顶端电弧，
 ##      BURST 出膛不再拉器口→落点引雷折线（9 把范围武器原先全先劈一道闪电），
 ##      雷系落点统一由贴身光柱承担。
-##   ⑪ 雷全竖直（2026-11-01）：链电逐跳只在目标头顶竖劈一道雷（落差 HOP_BOLT_DROP），
-##      敌人↔敌人之间的斜向穿越弧整段下线（用户口径「雷只能从上往下劈」）。
+##   ⑪ 链电只钉在敌人身上（2026-11-07 电刀重做）：链电的每一道电弧，两端都必须落在
+##      某只活着的敌人身位附近（缠身电 = 同一只敌人；敌人↔敌人连线 = 两只敌人各一端）。
+##      不许再出现「头顶悬空竖雷柱」（旧写法顶端在敌人上方 78px 的空气里，
+##      这正是用户口中「紫电在空气里飞来飞去」的本体）。
 ##
 ## 运行: godot --headless --path . res://tests/SuperVfxCheck.tscn
 ## 退出码 0 且末行 SUPER_VFX_RESULT: ALL PASS
@@ -38,7 +40,7 @@ extends Node
 ##   - activate 默认对链电放行分支 ⇒ ⑧ 报红
 ##   - sky_bolt 改回自 280px 天上拉折线（或重新调 spawn_body_arcs）⇒ ⑨ 报红
 ##   - ThunderBurst 改回 200px 天空雷柱 / BurstHandler 改回引雷折线 ⇒ ⑩ 报红
-##   - 链电改回 prev→enemy 斜向传导弧（或竖雷改成从下往上）⇒ ⑪ 报红
+##   - 链电改回头顶悬空竖雷柱 / 连线端点不拴敌人节点 ⇒ ⑪ 报红
 
 const EPS := 0.0001
 const MAX_WAIT_FRAMES := 180
@@ -65,7 +67,8 @@ func _run() -> void:
 	await _case_chain_targets()
 	_case_chain_number_standalone()
 	_case_chain_bolt_no_air()
-	await _case_chain_bolt_vertical()
+	await _case_chain_bolts_pinned_to_enemies()
+	await _case_tracked_follows_enemy()
 	await _case_sky_bolt_no_air()
 	await _case_burst_no_sky_line()
 	await _case_gates_independent()
@@ -278,10 +281,12 @@ func _visible_bolts() -> Array:
 			out.append(b)
 	return out
 
-## ⑪ 链电全竖直（2026-11-01）：逐跳只在目标头顶竖直劈到身位，敌人↔敌人斜向穿越弧整段下线。
-## 判据口径：凡是「长过缠身电（>40px）」的链电电弧，两端必须同 x 且自上而下。
-## 反例：改回 _draw_chain_segment 的 prev→enemy 连线 ⇒ 两端 x 不等 ⇒ 报红。
-func _case_chain_bolt_vertical() -> void:
+## ⑪ 链电只钉在敌人身上（2026-11-07 电刀重做）：窗口内出现过的每一条链电电弧，
+## 两端都必须落在某只活着的敌人身位附近 —— 缠身电两端在同一只怪身上，
+## 敌人↔敌人连线两端各钉一只。任何一道「顶端悬空的雷柱」都会让本判据报红。
+## 判据口径：端点到最近敌人的距离 ≤ END_SNAP（含体缘退让量 + 折线抖幅）。
+const END_SNAP := 30.0
+func _case_chain_bolts_pinned_to_enemies() -> void:
 	# 等上一条用例的电弧演完回池（headless 的 Tween 与墙钟不同步，按墙钟等）
 	var t0 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t0 < 160:
@@ -289,32 +294,71 @@ func _case_chain_bolt_vertical() -> void:
 	ChainLightning.reset_gate()
 	var a := _spawn_enemy(Vector2(340.0, 300.0))
 	var b := _spawn_enemy(Vector2(520.0, 380.0))
+	var c := _spawn_enemy(Vector2(360.0, 470.0))
 	await get_tree().process_frame
-	# 首跳打 a，第二跳自动锁最近的 b（两跳都要画出来）
+	var alive: Array[Node2D] = [a, b, c]
+	# 首跳打 a，之后自动锁最近的 b / c（两跳连线 + 三簇缠身电）
 	ChainLightning.strike(_world, a.global_position, a, 6.0)
-	# 电弧只亮 0.075s 就淡出：逐帧扫描窗口内出现过的每一条，按 instance_id 去重
-	# （等待+一次采样会漏掉先淡出的那一条）
+	# 电弧只亮 TRACKED_LIFE 就淡出：逐帧扫描窗口内出现过的每一条，按 instance_id 去重
 	var seen: Dictionary = {}
-	var t_end := Time.get_ticks_msec() + 220
+	var checked := 0
+	var t_end := Time.get_ticks_msec() + 260
 	while Time.get_ticks_msec() < t_end:
 		for bolt in _visible_bolts():
 			var id: int = bolt.get_instance_id()
 			if seen.has(id):
 				continue
-			var pts: PackedVector2Array = bolt._line_core.points
-			var top := pts[0]
-			var bottom := pts[pts.size() - 1]
-			if absf(bottom.y - top.y) <= 40.0:
-				continue  # 缠身电的短弧不参与本判据
 			seen[id] = true
-			_c.near(absf(bottom.x - top.x), 0.0, 0.01,
-				"链电传导雷两端同 x（不是斜向穿越弧，实际 dx=%.2f）" % absf(bottom.x - top.x))
-			_c.check(bottom.y > top.y, "链电传导雷自上而下劈（bottom.y=%.1f > top.y=%.1f）" % [bottom.y, top.y])
-			_c.near(absf(bottom.y - top.y), ChainLightning.HOP_BOLT_DROP, 0.01,
-				"链电竖雷落差 == HOP_BOLT_DROP")
+			var ends: Array = [bolt._track_end_a, bolt._track_end_b]
+			# 非拴绳弧（activate 路径）没有端点读数：它一旦出现就是「空气里的线」，直接判红
+			_c.check(not bolt._shape_t.is_empty(),
+				"链电电弧必须是拴绳弧（端点跟随敌人），实得未拴绳")
+			for end_pos in ends:
+				var p: Vector2 = end_pos
+				var best: float = INF
+				for e in alive:
+					if not is_instance_valid(e):
+						continue
+					best = minf(best, p.distance_to(e.global_position))
+				_c.check(best <= END_SNAP,
+					"链电电弧端点钉在敌人身上（离最近敌人 %.1fpx ≤ %.0f）" % [best, END_SNAP])
+				checked += 1
 		await get_tree().process_frame
-	_c.check(seen.size() >= 2, "链电逐跳各劈一道竖直雷（实得 %d 道）" % seen.size())
-	for e in [a, b]:
+	_c.check(seen.size() >= 2, "链电逐跳各画一道弧（实得 %d 道）" % seen.size())
+	_c.check(checked >= 4, "每条弧两端都参与校验（实得 %d 个端点）" % checked)
+	for e in alive:
+		if is_instance_valid(e):
+			e.queue_free()
+	await get_tree().process_frame
+
+## ⑫ 拴绳弧跟着敌人走：敌人位移后，电弧端点必须跟着挪到新位置（不是留在原地）。
+## 这是「紫电不在空气里飞」的机制本体 —— 旧写法把端点拍成快照，敌人一动线就留在空中。
+func _case_tracked_follows_enemy() -> void:
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 160:
+		await get_tree().process_frame
+	var a := _spawn_enemy(Vector2(200.0, 200.0))
+	var b := _spawn_enemy(Vector2(360.0, 200.0))
+	await get_tree().process_frame
+	var bolt := LightningBolt.acquire(_world)
+	bolt.activate_tracked(a, b, Vector2.ZERO, Vector2.ZERO, 0.0, 0.0, true,
+		GameStyle.FX_HDR_ZIDIAN, 1.0)
+	await get_tree().process_frame
+	var before: Vector2 = bolt._track_end_a
+	_c.near(before.distance_to(a.global_position), 0.0, 0.01, "拴绳弧端点初始钉在敌人身上")
+	# 把敌人挪走 60px，等一帧：端点必须跟过去
+	a.global_position += Vector2(60.0, -40.0)
+	await get_tree().process_frame
+	var after: Vector2 = bolt._track_end_a
+	_c.near(after.distance_to(a.global_position), 0.0, 0.01,
+		"敌人移动后电弧端点跟着走（不留空气残线）")
+	_c.check(after.distance_to(before) > 40.0, "端点确实发生了位移（不是快照）")
+	# 敌人被打死（出树）后电弧立刻收线
+	b.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_c.check(not bolt.visible, "锚点敌人失效后电弧立刻收线（不悬在空气里）")
+	for e in [a]:
 		if is_instance_valid(e):
 			e.queue_free()
 	await get_tree().process_frame

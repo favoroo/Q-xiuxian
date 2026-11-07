@@ -164,12 +164,12 @@ func _test_spirit_beast_stage_scaling() -> void:
 	_c.check(GameBalance.spirit_beast_contact_range(4) > GameBalance.SPIRIT_BEAST_CONTACT_RANGE, "4 阶近身啃咬半径大于基础")
 	_c.check(GameBalance.spirit_beast_crowd_radius(4) > GameBalance.SPIRIT_BEAST_CROWD_RADIUS, "4 阶拥挤半径大于基础")
 
-## 血祭代价（2026-11-02）：最大生命 18%、至少 1 点
+## 血祭代价（2026-11-02）：最大生命 80%、至少 1 点
 func _test_obelisk_blood_cost() -> void:
-	_c.check(BalanceObelisk.BLOOD_HP_RATIO > 0.0 and BalanceObelisk.BLOOD_HP_RATIO < 0.5,
-		"血祭比例在 (0,0.5)（不能一次烧掉半管血）")
-	_c.equals(BalanceObelisk.blood_cost(100.0), 18, "血祭代价：100 血=18")
-	_c.equals(BalanceObelisk.blood_cost(200.0), 36, "血祭代价：200 血=36")
-	_c.equals(BalanceObelisk.blood_cost(55.0), 10, "血祭代价：55 血向上取整=10")
+	_c.check(BalanceObelisk.BLOOD_HP_RATIO > 0.0 and BalanceObelisk.BLOOD_HP_RATIO < 1.0,
+		"血祭比例在 (0,1)（不能一次烧光全部生命上限）")
+	_c.equals(BalanceObelisk.blood_cost(100.0), 80, "血祭代价：100 血=80")
+	_c.equals(BalanceObelisk.blood_cost(200.0), 160, "血祭代价：200 血=160")
+	_c.equals(BalanceObelisk.blood_cost(55.0), 44, "血祭代价：55 血向上取整=44")
 	_c.equals(BalanceObelisk.blood_cost(0.0), 1, "血祭代价：0 血上限也至少 1 点")
-	_c.equals(GameBalance.obelisk_blood_cost(100.0), 18, "GameBalance 转发血祭代价一致")
+	_c.equals(GameBalance.obelisk_blood_cost(100.0), 80, "GameBalance 转发血祭代价一致")

@@ -495,23 +495,32 @@ const BODY_ARC_COUNT_CROWDED := 2
 ## 这是电刀模式的「被电到」读数 —— 电只在敌人身上闪，空气里一条线都不许有
 ## （旧写法是敌人↔敌人之间的全长穿越线 + 从中段甩向空白的随机分支/余韵，玩家读起来就是一屏乱线）。
 ## 走 LightningBolt 池且 allow_branch=false：不甩中段分支、不出空气余韵微弧。纯表现随机。
+## anchor（2026-11-07）：传敌人节点时整簇弧拴在它身上逐帧跟随（activate_tracked），
+## 敌人被击退时电跟着走 —— 旧写法把端点拍成世界坐标快照，敌人一挪弧就悬在空气里。
 static func spawn_body_arcs(parent: Node, pos: Vector2, col: Color = Color(2.4, 2.3, 1.9),
-		radius: float = BODY_ARC_RADIUS, count: int = BODY_ARC_COUNT) -> void:
+		radius: float = BODY_ARC_RADIUS, count: int = BODY_ARC_COUNT,
+		anchor: Node2D = null) -> void:
 	if parent == null or not is_instance_valid(parent):
 		return
 	if not _pos_in_viewport(parent, pos):
 		return
 	var n: int = BODY_ARC_COUNT_CROWDED if FxBudget.crowded else count
+	var track: bool = anchor != null and is_instance_valid(anchor)
 	for i in n:
 		# 两端各取身体半径内的随机点：端点绝不落到体外，读作「电缠在这只怪身上」
 		var a0 := randf() * TAU
 		var a1 := a0 + PI + randf_range(-0.7, 0.7)
-		var from_p := pos + Vector2.from_angle(a0) * radius * randf_range(0.45, 1.0)
-		var to_p := pos + Vector2.from_angle(a1) * radius * randf_range(0.45, 1.0)
+		var off0 := Vector2.from_angle(a0) * radius * randf_range(0.45, 1.0)
+		var off1 := Vector2.from_angle(a1) * radius * randf_range(0.45, 1.0)
 		var bolt := LightningBolt.acquire(parent)
 		if bolt == null:
 			continue
-		bolt.activate(from_p, to_p, col, BODY_ARC_WIDTH, Color(0, 0, 0, 0), false)
+		if track:
+			# 两端都锚在同一只敌人上：偏移是相对身位的常向量，敌人一动整簇弧跟着走
+			bolt.activate_tracked(anchor, anchor, off0, off1, 0.0, 0.0, false,
+				col, BODY_ARC_WIDTH)
+		else:
+			bolt.activate(pos + off0, pos + off1, col, BODY_ARC_WIDTH, Color(0, 0, 0, 0), false)
 
 ## 所有 spawn 的前置：拿到有效场景根并保证池宿主已就位
 static func _ready_to_spawn(parent: Node) -> bool:

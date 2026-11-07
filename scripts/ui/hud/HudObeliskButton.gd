@@ -251,7 +251,7 @@ func _process(_delta: float) -> void:
 
 ## 键面价格小字：读本回合现价与余额（2026-10-26 从碑顶悬浮字挪进键面）。
 ## 本局第一次启动免费（2026-10-30）写「免费」；够钱「N金币」奶白，不够「差N」朱砂。
-## 2026-11-02 血祭：金币不足但生命付得起时，主文案切「血祭」、价格写「耗18%」——
+## 2026-11-02 血祭：金币不足但生命付得起时，主文案切「血祭」、价格写「耗80%」——
 ## 有钱时永远优先金币，血祭只是没钱时的替代路径。
 func _refresh_price() -> void:
 	if _price == null:
@@ -268,7 +268,7 @@ func _refresh_price() -> void:
 		elif GameManager.spirit_stones >= cost:
 			key = "%d金币" % cost
 		elif _active_ob.can_blood_ritual():
-			key = "耗18%"
+			key = "耗80%"
 			col = GameStyle.BAD
 			face = "血祭"
 			blood = true

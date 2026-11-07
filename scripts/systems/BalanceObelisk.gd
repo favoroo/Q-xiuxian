@@ -61,9 +61,9 @@ static func tier_knock_mult(tier: int) -> float:
 
 # ---------------- 血祭（金币不足时的替代启动路径） ----------------
 
-## 血祭代价：最大生命的 18%，至少 1 点。用 ceil 保证低血量时也扣得出 1 点。
-## 只在「金币 < 启动价」时开放；扣完至少留 1 点生命，不能因血祭直接死亡。
-const BLOOD_HP_RATIO := 0.18
+## 血祭代价：最大生命的 80%，至少 1 点。用 ceil 保证低血量时也扣得出 1 点。
+## 只在「金币 < 启动价」时开放；闸门要求当前生命付得起（扣完至少留 1 点），不能因血祭直接死亡。
+const BLOOD_HP_RATIO := 0.80
 
 static func blood_cost(max_hp: float) -> int:
 	return maxi(1, int(ceil(maxf(max_hp, 0.0) * BLOOD_HP_RATIO)))

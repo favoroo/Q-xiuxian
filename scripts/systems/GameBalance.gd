@@ -574,7 +574,7 @@ static func obelisk_altar_tier(wave: int, activations_done: int) -> int:
 static func obelisk_tier_name(tier: int) -> String:
 	return BalanceObelisk.tier_name(tier)
 
-## 血祭代价：最大生命 × 18%，至少 1 点
+## 血祭代价：最大生命 × 80%，至少 1 点
 static func obelisk_blood_cost(max_hp: float) -> int:
 	return BalanceObelisk.blood_cost(max_hp)
 

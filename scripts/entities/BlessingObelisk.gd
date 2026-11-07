@@ -304,7 +304,7 @@ func can_blood_ritual() -> bool:
 		return false
 	return float(player.current_health) > float(blood_cost()) + 1.0
 
-## 血祭代价（按当前最大生命取 18%，至少 1 点）
+## 血祭代价（按当前最大生命取 80%，至少 1 点）
 func blood_cost() -> int:
 	var player = GameManager.player
 	var max_hp: float = float(player.max_health) if player != null else 0.0
@@ -419,7 +419,7 @@ func start_charge() -> void:
 	if spent_this_wave or is_infusing or not is_player_inside:
 		return
 	## 金币闸（2026-10-25 重设计）：不够就横幅 + 报错音，不进充能。
-	## 2026-11-02 血祭：金币不足但生命付得起 18% ⇒ 切血祭模式，照样进充能，扣血不扣钱。
+	## 2026-11-02 血祭：金币不足但生命付得起 80% ⇒ 切血祭模式，照样进充能，扣血不扣钱。
 	## 本局第一次启动免费（2026-10-30）时 cost = 0，永远走普通档，不消耗生命。
 	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number, GameManager.obelisk_activations)
 	_blood_mode = false
