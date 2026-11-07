@@ -164,19 +164,6 @@ func _test_spirit_beast_stage_scaling() -> void:
 	_c.check(GameBalance.spirit_beast_contact_range(4) > GameBalance.SPIRIT_BEAST_CONTACT_RANGE, "4 阶近身啃咬半径大于基础")
 	_c.check(GameBalance.spirit_beast_crowd_radius(4) > GameBalance.SPIRIT_BEAST_CROWD_RADIUS, "4 阶拥挤半径大于基础")
 
-## 环绕火苗数量（2026-11-02）：1 召唤 = 1 枚，封顶 8 枚；回退时同步减少
-func _test_obelisk_orbiters_cap() -> void:
-	var orbiters := ObeliskOrbiters.new()
-	add_child(orbiters)
-	orbiters.set_count(99)
-	_c.equals(orbiters.orbiter_count(), ObeliskOrbiters.MAX_ORBITERS,
-		"环绕火苗：累计召唤超过上限时封顶 %d 枚" % ObeliskOrbiters.MAX_ORBITERS)
-	orbiters.set_count(3)
-	_c.equals(orbiters.orbiter_count(), 3, "环绕火苗：召唤数回退时火苗同步减到 3")
-	orbiters.set_count(0)
-	_c.equals(orbiters.orbiter_count(), 0, "环绕火苗：召唤数归零时全部清空")
-	orbiters.queue_free()
-
 ## 血祭代价（2026-11-02）：最大生命 18%、至少 1 点
 func _test_obelisk_blood_cost() -> void:
 	_c.check(BalanceObelisk.BLOOD_HP_RATIO > 0.0 and BalanceObelisk.BLOOD_HP_RATIO < 0.5,

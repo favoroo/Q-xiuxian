@@ -138,7 +138,7 @@
       "fps": 20,
       "max_frames": 24,
       "loop": true,
-      "scale": 0.30,
+      "scale": 0.3,
       "palette_key": "gold",
       "anchor": "center",
       "desc": "祭坛环绕灵火：每次成功召唤 +1 枚，环绕祭坛基座"
@@ -160,7 +160,7 @@
       "fps": 20,
       "max_frames": 30,
       "loop": false,
-      "scale": 0.60,
+      "scale": 0.6,
       "palette_key": "fire",
       "anchor": "bottom",
       "desc": "炉君地火柱、赤炎起手"
@@ -182,7 +182,7 @@
       "fps": 24,
       "max_frames": 28,
       "loop": false,
-      "scale": 0.70,
+      "scale": 0.7,
       "palette_key": "fire",
       "anchor": "center",
       "desc": "炉爆、凤皇涅槃"
@@ -248,10 +248,98 @@
       "fps": 24,
       "max_frames": 24,
       "loop": false,
-      "scale": 0.70,
+      "scale": 0.7,
       "palette_key": "arcane",
       "anchor": "bottom",
       "desc": "激光充能（会被 follow 到 Boss 身上）"
+    },
+    {
+      "id": "arcane/rune-circle",
+      "out_name": "rune_circle",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 1.8,
+      "palette_key": "gold",
+      "anchor": "center",
+      "desc": "金符环（2026-11-07）：炮塔阵盘/玩家光环/敌环/刷怪预告使用；祭坛曾用后于同日「去花」下线"
+    },
+    {
+      "id": "spawn/spawn-portal",
+      "out_name": "spawn_portal",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.7,
+      "palette_key": "shadow",
+      "anchor": "bottom",
+      "desc": "刷怪预警妖气裂隙：地面撕开魔纹旋涡+火花涌出再拧灭；精英/Boss 必播，普通怪随帧闸自然错峰"
+    },
+    {
+      "id": "lightning/thunderclap",
+      "out_name": "sonic_ring",
+      "fps": 24,
+      "max_frames": 22,
+      "loop": false,
+      "scale": 0.65,
+      "palette_key": "arcane",
+      "anchor": "bottom",
+      "desc": "音波环（音笛落点）：thunderclap 冲击环段改烟紫冷调，替换三重矢量音波环"
+    },
+    {
+      "id": "explosions/plasma-explosion",
+      "out_name": "kill_blast",
+      "fps": 24,
+      "max_frames": 22,
+      "loop": false,
+      "scale": 0.6,
+      "palette_key": "ember",
+      "anchor": "center",
+      "desc": "击杀爆炸（裂魂铃系）：等离子灵爆替换矢量三环，碎块粒子保留"
+    },
+    {
+      "id": "nature/toxic-puddle",
+      "out_name": "toxic_puddle",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 0.9,
+      "palette_key": "poison",
+      "anchor": "center",
+      "desc": "毒潭液面：沥青潭体+黄绿光脉+气泡鼓破 loop，缩放与判定半径同步"
+    },
+    {
+      "id": "nature/toxic-puddle",
+      "out_name": "ember_pool",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 0.9,
+      "palette_key": "fire",
+      "anchor": "center",
+      "desc": "火池液面：toxic-puddle 同源火调色板，火域/火潭 loop 共用"
+    },
+    {
+      "id": "holy/divine-shield",
+      "out_name": "blood_ward",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 1.0,
+      "palette_key": "ember",
+      "anchor": "center",
+      "desc": "血海护盾罩：球面流光罩体（--no-actor 后仅剩罩面流光，接入前需目检非空壳）"
+    },
+    {
+      "id": "holy/heal-aoe",
+      "out_name": "heal_aoe",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.9,
+      "palette_key": "heal",
+      "anchor": "center",
+      "desc": "治疗法阵：灵种落地青环滚开+十字光浮起 one-shot，回春术阵/灵医脉冲共用"
     }
   ]
 }

@@ -19,6 +19,7 @@ var _redraw_timer: float = 0.0
 var _clock: float = 0.0
 var _phase: float = 0.0
 var _particle_timer: float = 0.0
+var _portal_native: AnimatedSprite2D = null  ## 精英/魔君档妖气裂隙常驻件（普通档走 FxFlipbookPool 池化，不建常驻）
 
 ## 在树实例计数：WaveSpawner._tide_spent 每帧查「是否还有凝聚中的指示器」，
 ## 原来每帧全量遍历战斗层全部子节点（100+），改走 O(1) 计数
@@ -66,6 +67,8 @@ func _reset(pos: Vector2, elite: bool, boss: bool) -> void:
 	spawn_callback = Callable()
 	global_position = pos
 	visible = true
+	# pixelfx 接入点（回退：注释下一行）：预警起手，在落点地面垫一层妖气裂隙。
+	_start_portal_fx(pos)
 	set_process(true)
 	queue_redraw()
 
@@ -79,6 +82,8 @@ func _release() -> void:
 	visible = false
 	if get_parent() != null:
 		get_parent().remove_child(self)
+	# 出树后其子精灵也不在树内，可立即 free（不留残留，避免同帧 LIFO 复用叠出两层裂隙）
+	_release_portal_native()
 	if _pool.size() < POOL_CAP:
 		_pool.append(self)
 	else:
@@ -153,6 +158,65 @@ func _finish_and_spawn() -> void:
 ## 凝聚总时长：魔君长版，普通/精英共用 1.1s
 func _duration() -> float:
 	return BOSS_DURATION if is_boss else DURATION
+
+# ---------------- 妖气裂隙贴图层（2026-11-07 pixelfx 接入） ----------------
+## 预警起手在落点地面垫播 spawn_portal（bottom 锚点=裂隙地面中心，已由 FxSheetData.get_offset 对到本节点位置）。
+## 红环/十字煞针/Boss 魔轮是本组件的矢量绘制，才是判定公平性读数（半径=预警半径）；
+## 裂隙只是锦上添花，因此：
+##   普通档 —— 走 FxFlipbookPool 一次性池化播放，撞帧闸（≤5/物理帧、同帧 16px 内重叠）返回 null 就静默放弃；
+##   精英/魔君档 —— 必须播成，走常驻模式自建 AnimatedSprite2D（绕过帧闸、不占池），随指示器生命周期释放。
+func _start_portal_fx(pos: Vector2) -> void:
+	if is_boss or is_elite:
+		if _portal_native == null:
+			_build_portal_native()
+		if _portal_native == null:
+			return
+		# Boss 档 1.2 加大（大物将出的排面），精英 1.0；倍数乘配置基础 scale（0.70）
+		var mult := 1.2 if is_boss else 1.0
+		_portal_native.scale = Vector2.ONE * float(FxSheetData.get_config(&"spawn_portal").get("scale", 0.7)) * mult
+		_portal_native.visible = true
+		_portal_native.play(&"default")
+	else:
+		# 复用整备：上一次可能是精英档，留下的常驻裂隙要先压掉，避免复用拍残留
+		if _portal_native != null and is_instance_valid(_portal_native):
+			_portal_native.visible = false
+		FxFlipbookPool.play(&"spawn_portal", pos, {"z_ground": true})
+
+## 常驻模式自建精灵（照金符环常驻配方——祭坛 2026-11-07「去花」后此配方以本处为准）：
+## 绕过帧闸、不占 FxFlipbookPool 池位；只给精英/魔君用，数量少，可接受常驻。
+## show_behind_parent=true 把裂隙压在预警矢量环之下（EntitiesLayer 全员 z=0，
+## 负 z 会整只沉到 MapLayer 地砖之下不可见 —— FloatingWeapon 同款坑）。
+func _build_portal_native() -> void:
+	var frames := FxSheetData.get_sprite_frames(&"spawn_portal")
+	if frames == null:
+		return
+	_portal_native = AnimatedSprite2D.new()
+	_portal_native.sprite_frames = frames
+	_portal_native.animation = &"default"
+	_portal_native.centered = true
+	_portal_native.offset = FxSheetData.get_offset(&"spawn_portal")
+	_portal_native.z_as_relative = false
+	_portal_native.z_index = 0
+	_portal_native.show_behind_parent = true
+	_portal_native.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	var mat := FxFlipbookPool.get_hdr_material()
+	if mat != null and not FxBudget.crowded:
+		_portal_native.material = mat
+	_portal_native.animation_finished.connect(_on_portal_finished)
+	add_child(_portal_native)
+
+## 一次性裂隙播完即隐（"撕开再拧灭"）：不给后续等待期留一帧定格残影。
+## 不 queue_free，留给下次复用重播；真正的释放统一走 _release_portal_native。
+func _on_portal_finished() -> void:
+	if _portal_native != null and is_instance_valid(_portal_native):
+		_portal_native.visible = false
+
+## 释放常驻裂隙：调用点一律在 self 出树之后，子树同不在树内，可立即 free 杜绝复用拍残留。
+func _release_portal_native() -> void:
+	if _portal_native != null and is_instance_valid(_portal_native):
+		if not _portal_native.is_queued_for_deletion():
+			_portal_native.free()
+	_portal_native = null
 
 func _draw() -> void:
 	BatchDraw.flush(self)

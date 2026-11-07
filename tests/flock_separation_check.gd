@@ -126,13 +126,21 @@ func _run_group(spawn_pos: Array[Vector2], with_separation: bool) -> float:
 		group.append(e)
 	await get_tree().process_frame
 
-	var max_speed_seen := 0.0
+	var worst_ratio_seen := 0.0
 	for i in range(MAX_WAIT_FRAMES):
 		await get_tree().physics_frame
 		if with_separation:
 			for e in group:
-				if is_instance_valid(e):
-					max_speed_seen = maxf(max_speed_seen, e.velocity.length())
+				# ③ 分离不造加速怪：钉「合速度指令 _pp_target_vel」而不是瞬时 velocity。
+				# velocity 里混着两类设计内的脚本速度：扑咬冲刺（LUNGE_SPEED_MUL=2.1× 直写）
+				# 与咬人被弹开的接触反冲（CONTACT_RECOIL_SPEED ≈2.48× 史莱姆移速 + 900px/s²
+				# 减速尾巴）——2026-11-07 诊断实锤：超速帧全部是 _pp_stun 反冲帧/冲刺帧，
+				# 与分离无关（分离在承诺型状态本来就不参与，combine 的 COMBINE_SLACK=1.15
+				# 钉住合速度上限）。_pp_target_vel 是追击+分离的合成指令，分离若被改成
+				# 「加速度式」叠加它必超，正是本断言要抓的回归。冲刺段直写指令，排除。
+				if is_instance_valid(e) and (e.lunge == null or not e.lunge.is_dashing()):
+					worst_ratio_seen = maxf(worst_ratio_seen,
+						e._pp_target_vel.length() / maxf(e.move_speed, 1.0))
 
 	var min_dist := 99999.0
 	for a in range(group.size()):
@@ -141,12 +149,8 @@ func _run_group(spawn_pos: Array[Vector2], with_separation: bool) -> float:
 				min_dist = minf(min_dist, group[a].global_position.distance_to(group[b].global_position))
 
 	if with_separation:
-		# ③ 分离不造加速怪：稳态速度不超过自身 eff_speed 的 1.15 倍（容许插值/碰撞的瞬时超调）
-		var worst := 0.0
-		for e in group:
-			if is_instance_valid(e):
-				worst = maxf(worst, e.velocity.length() / maxf(e.move_speed, 1.0))
-		_c.check(worst <= 1.15, "分离不造加速怪（最快一只 = %.2f× 移速 ≤ 1.15×）" % worst)
+		_c.check(worst_ratio_seen <= 1.15 + 0.01,
+			"分离不造加速怪（全程合成指令最快 = %.2f× 移速 ≤ 1.15×）" % worst_ratio_seen)
 
 	for e in group:
 		if is_instance_valid(e):

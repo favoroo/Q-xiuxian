@@ -5,7 +5,7 @@ extends RefCounted
 ## 背景：内置 CanvasItem.draw_circle 固定 64 段，1px 小点也付 ~63 个三角形的钱；
 ## 地面/阵法装饰层往往上百个微小圆点，单层就能吃掉上万图元（实测 21k 的大头）。
 ## 按半径自适应 6~28 段，微小装饰点肉眼无差。与 CultivatorBase._circle/_arc 同一思路，
-## 抽成静态工具供非 Cultivator 系的装饰层（GroundDecorLayer/ArenaVisualLayer/player_aura 等）共用。
+## 抽成静态工具供非 Cultivator 系的装饰层（GroundDecorLayer/ArenaVisualLayer 等）共用。
 ## 静态缓冲复用：_draw 在主线程串行执行，无重入风险。
 ##
 ## 2026-10-29 性能补充：

@@ -1,10 +1,8 @@
 extends Node2D
 
-## 祭坛「灵脉阶 × 召唤次数」整坛调形台（非判据，不参与绿灯）：
-## 四座真实 BlessingObelisk 并排，展示两个独立读数 ——
-##   阶数（水晶大小/阵盘/灵光） 1→4；
-##   召唤次数（环绕火苗数量） 0 / 3 / 5 / 8。
-## 供改 ObeliskOrbiters / sunburst 灵光 / 水晶形体时直接看整坛效果。
+## 祭坛「灵脉阶」整坛调形台（非判据，不参与绿灯）：
+## 四座真实 BlessingObelisk 并排，看阶数（水晶大小/界环徽印）1→4 的形态差。
+## 2026-11-07「去花」后祭坛无常驻特效（符环/日轮/环绕火苗全下线），本台只剩调形体。
 ## 运行（不能加 --headless，headless 不渲染）：
 ##   $G --path . res://tests/ObeliskAltarPreview.tscn
 ## 附带 --shot 时渲染 2 秒后存一张整图到 /tmp/obelisk_altar_preview.png 并退出。
@@ -14,7 +12,6 @@ const BG_COL := Color(0.07, 0.10, 0.16)
 const X_STEP := 226.0
 const ORIGIN_Y := 300.0
 const TIERS := [1, 2, 3, 4]
-const ORBITS := [0, 3, 5, 8]
 
 var _altars: Array[BlessingObelisk] = []
 
@@ -36,7 +33,7 @@ func _ready() -> void:
 		add_child(bg)
 
 	var title := Label.new()
-	title.text = "祭坛整坛调形台：水晶看阶数，环绕火苗看召唤次数"
+	title.text = "祭坛整坛调形台：水晶看阶数（去花后无环绕火苗）"
 	title.position = Vector2(40, 16)
 	GameStyle.label(title, 14, GameStyle.CHALK, 0, GameStyle.INK, true)
 	add_child(title)
@@ -50,15 +47,13 @@ func _ready() -> void:
 		# 预览直接覆写档位：真实祭坛 _ready 会按 GameManager 现价定档，这里四座要并排展示
 		ob._obelisk_tier = tier
 		ob._obelisk_renderer.tier = tier
-		ob._orbiters.set_tier(tier)
-		ob._orbiters.set_count(ORBITS[i])
 		ob.is_player_inside = true
 		if ob.light != null:
 			ob.light.energy = ob._tier_light_energy()
 		_altars.append(ob)
 
 		var lbl := Label.new()
-		lbl.text = "%s · 召唤 %d 次" % [GameBalance.obelisk_tier_name(tier), ORBITS[i]]
+		lbl.text = GameBalance.obelisk_tier_name(tier)
 		lbl.position = Vector2(x - 90.0, 430.0)
 		lbl.size = Vector2(180, 24)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -80,10 +75,3 @@ func _auto_shot() -> void:
 	img.save_png("/tmp/obelisk_altar_preview.png")
 	print("SAVED: /tmp/obelisk_altar_preview.png")
 	get_tree().quit(0)
-
-func _process(_delta: float) -> void:
-	# 让四座祭坛的阵盘各转各的，方便看出环数差
-	for i in range(_altars.size()):
-		var ob := _altars[i]
-		if ob != null and is_instance_valid(ob) and ob.circle_sprite != null:
-			ob.circle_sprite.rotation += _delta * (0.3 + 0.08 * float(i))

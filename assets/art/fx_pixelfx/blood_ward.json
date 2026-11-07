@@ -1,0 +1,20 @@
+{
+  "id": "holy/divine-shield",
+  "out_name": "blood_ward",
+  "frame_size": [
+    88,
+    84
+  ],
+  "pivot": [
+    44,
+    68
+  ],
+  "anchor": "center",
+  "scale": 1.0,
+  "fps": 20,
+  "loop": true,
+  "frames_count": 24,
+  "palette_key": "ember",
+  "png_bytes": 139221,
+  "vram_kb": 721
+}

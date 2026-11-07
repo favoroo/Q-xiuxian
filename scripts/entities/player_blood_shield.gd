@@ -12,6 +12,10 @@ extends Node2D
 ##   - 只读 GameManager.shield_hp，不写任何玩法状态；
 ##   - 相位用 instance_id 取模错相（不需要随机数，不碰 GameManager.rng）；
 ##   - 纯 _draw，不申请 FxBudget 的动态灯名额（20/20 已顶格）。
+##
+## 【2026-11-07 pixelfx 罩面】矢量血泡（_draw）保留为底层 —— 低配兜底 + 判定同源；
+## 其上叠 pixelfx `blood_ward` 常驻子精灵（球面经线 + 扫光 loop，血红调 modulate），
+## 罩心对齐泡心；血珠上浮与结盾闪边原样保留。
 
 ## 血泡几何（对齐程序化角色身形：宽 ±12、头顶 y≈-18、脚底 y≈+24，留几 px 余量）
 const CENTER := Vector2(0.0, 3.0)
@@ -29,16 +33,23 @@ const FLASH_DECAY := 4.0
 const DRIP_COUNT := 3
 const DRIP_RISE := 26.0
 
+## pixelfx 血盾罩面（2026-11-07 线条圈通刷接入）：叠在矢量血泡之上的常驻子精灵。
+const WARD_ID := &"blood_ward"      ## 88×84 源画幅，基础 scale 1.0，pivot(44,68)=罩心
+const WARD_ALPHA := 0.6             ## 罩面基准不透明度（血红调 modulate，半透不挡角色）
+const WARD_FLASH_EXTRA := 0.35      ## 结盾/吸盾闪光叠加到罩面上的额外不透明度
+
 var _t: float = 0.0
 var _phase: float = 0.0
 var _flash: float = 0.0
 var _shown: bool = false
+var _ward: AnimatedSprite2D = null  ## 罩面常驻子精灵（loop，随本节点显隐）
 
 func _ready() -> void:
 	# 盖在角色贴图之上（半透明血泡），但远低于 HUD / 特效层
 	z_index = 1
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_phase = fposmod(float(get_instance_id() % 97) * 0.013, TAU)
+	_build_ward()   # pixelfx 接入点（回退：注释本行即只剩矢量血泡）
 	if not GameManager.shield_changed.is_connected(_on_shield_changed):
 		GameManager.shield_changed.connect(_on_shield_changed)
 	set_process(true)
@@ -49,6 +60,9 @@ func _process(delta: float) -> void:
 		if _shown:
 			_shown = false
 			visible = false
+		# 罩面自带贴图，宿主 _draw 的提前 return 挡不住子精灵：无盾时显式收掉
+		if _ward != null:
+			_ward.visible = false
 		_flash = 0.0
 		return
 	_shown = true
@@ -56,11 +70,52 @@ func _process(delta: float) -> void:
 	_t += delta
 	if _flash > 0.0:
 		_flash = maxf(0.0, _flash - delta * FLASH_DECAY)
+	# 罩面随结盾/吸盾一起闪一下（与矢量亮边同一个 _flash 读数）
+	if _ward != null:
+		_ward.visible = true
+		_ward.modulate = GameStyle.with_alpha(GameStyle.FX_HDR_XUEHAI, minf(1.0, WARD_ALPHA + _flash * WARD_FLASH_EXTRA))
 	queue_redraw()
 
 func _on_shield_changed(_shield: float, _cap: float) -> void:
 	# 结盾（涨）/ 吸盾（落）都闪一下 —— 这是玩家唯一能读到「盾在动」的时刻
 	_flash = 1.0
+
+## pixelfx 血盾罩面（blood_ward）：贴图自带球面经线 + 扫光 loop，压在矢量血泡（宿主 _draw）之上。
+## pivot(44,68) 是罩心，配置 offset 把罩心对到节点原点；这里再摆到泡心 CENTER，罩心对齐泡心。
+## 已知风险：源效果导出时剥离了假人（holy/divine-shield），罩面若被确认空壳，本子项整段回退
+## （注释掉 _ready 里的 _build_ward() 调用即可，矢量血泡不受影响）。
+func _build_ward() -> void:
+	if _ward != null:
+		return
+	var frames := FxSheetData.get_sprite_frames(WARD_ID)
+	if frames == null:
+		return
+	var conf: Dictionary = FxSheetData.get_config(WARD_ID)
+	var fw: float = 88.0
+	var base: float = 1.0
+	if not conf.is_empty():
+		var fs: Vector2 = conf.get("frame_size", Vector2(88.0, 84.0))
+		fw = maxf(fs.x, 1.0)
+		base = float(conf.get("scale", 1.0))
+	# 罩径换算：血泡是椭圆（RX×RY），罩是球 —— 取主导直径（2×RY）作目标世界宽，
+	# 球面完整罩住血泡（2×RY=62 ≥ 泡宽 2×RX=44）；mult = D /(画幅宽 × 基础 scale)
+	var mult: float = (2.0 * RY) / (fw * base)
+	var anim := AnimatedSprite2D.new()
+	anim.name = "BloodWardFx"
+	anim.sprite_frames = frames
+	anim.animation = &"default"
+	anim.centered = true
+	anim.offset = FxSheetData.get_offset(WARD_ID)
+	anim.position = CENTER
+	anim.scale = Vector2.ONE * (base * mult)
+	anim.modulate = GameStyle.with_alpha(GameStyle.FX_HDR_XUEHAI, WARD_ALPHA)
+	anim.visible = false   ## 无盾时先收起（_process 按盾量显隐）
+	var mat := FxFlipbookPool.get_hdr_material()
+	if mat != null and not FxBudget.crowded:
+		anim.material = mat
+	add_child(anim)
+	anim.play(&"default")
+	_ward = anim
 
 func _draw() -> void:
 	var shield: float = GameManager.shield_hp

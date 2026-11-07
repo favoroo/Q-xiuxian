@@ -15,6 +15,13 @@ extends Node2D
 ## 玩家仍能从底盘读出真实打击范围（铁律 7：画多大==判多大）。
 ## 序列帧配置缺失 / 资源未导入 / 被物理帧预算掐掉时 play() 返回 null，_sheet_played=false，
 ## 自动回退到下面原有的纯 _draw 形态（老画法一行未删，仍是唯一兜底）。
+##
+## pixelfx 序列帧接入（2026-11-07 车道 B）：线条件通刷——
+##   sonic 音波环（sonic_ring）/ drum 鼓震波（thunderclap）/ seal 坠印扬尘（ground_slam）
+##   三形态主形态改为 sheet；fire_rain 多枚小爆只对首枚（近中心那枚）叠一张 fire_ring。
+## sonic/drum 由 sheet 整替（_sheet_played 时 _draw_* 早退，矢量环+刻度/震线全部下线，
+## 代码仍在，回退 = 删掉早退那两行即复活）；seal 只把「重冲击环」交给 ground_slam，
+## 扬尘环 + 10 尘点保留（坠印的「压」感靠尘，见 _draw_seal_dust）。命中半径/伤害一行不动。
 
 var kind: String = "thunder"
 var radius: float = 80.0
@@ -26,13 +33,19 @@ const FIREBALLS := 5       ## 火雨落点数
 const FROST_SPIKES := 7    ## 冰刺数
 const SONIC_RINGS := 3     ## 音波环数
 const EARTH_CRACKS := 6    ## 地裂条数
+## fire_rain 只给首枚（近中心那枚）叠一张 fire_ring：多枚小爆逐枚播 sheet 会连环撞帧闸
+## （FxFlipbookPool 同物理帧预算 + 16px 重叠丢弃），取 ~0.5 的小尺寸当单枚爆开的点缀，
+## 其余四枚仍走矢量火核+余烬（见 _draw_fire_rain），一眼贴图化又不糊屏。
+const FIRE_RING_SCALE_MULT := 0.5
 ## 序列帧接管主形态后自绘底盘的透明度系数：地裂裂缝 / 冰刺霜环压到这个档位，
 ## 只留「判定半径」的读法，不与 sheet 主体抢亮度（sheet 是主形态，底盘是范围脚注）。
 const SHEET_BASE_ALPHA := 0.5
 
 var _t: float = 0.0
-## 本次演出是否成功起了 pixelfx 序列帧（earth/frost 专用）：false 时自绘形态全量兜底。
+## 本次演出是否成功起了 pixelfx 序列帧（earth/frost/sonic/drum/seal 专用）：false 时自绘形态全量兜底。
 var _sheet_played: bool = false
+## fire_rain 首枚 fire_ring 是否已起（本函数 _draw 每帧会多次进入，防重复播放）。
+var _fire_ring_played: bool = false
 ## 重绘节流（2026-10-14）：演出窗口内原每帧无条件重绘，0.38s 演出 20Hz 足够流畅
 ## 60fps 档（2026-10-15 VisualRate 档位联动）：演出 0.38s 在 60fps 下只 23 帧，
 ## 20Hz 每 3 帧一画会露台阶，高帧档翻倍 40Hz；低档 20Hz 是 perf_probe 预算口径。
@@ -58,6 +71,7 @@ func activate_fx(p_kind: String, p_radius: float, p_tint: Color) -> void:
 	tint = p_tint
 	_t = 0.0
 	_sheet_played = false
+	_fire_ring_played = false
 	if kind == "thunder" or kind == "":
 		visible = false
 		set_process(false)
@@ -71,8 +85,35 @@ func activate_fx(p_kind: String, p_radius: float, p_tint: Color) -> void:
 	elif kind == "frost":
 		# 冰刺：默认 Z_OVERLAY 档（冰柱从地下戳出，要盖在角色身位之上才读得出「刺穿」）
 		_sheet_played = FxFlipbookPool.play(&"ice_spikes", global_position) != null
+	elif kind == "sonic":
+		# 音波环（烟紫冷调，bottom 锚点对落点）：sheet 环径经 scale_mult 对齐判定直径，
+		# 替换 _draw_sonic 的三重矢量音波环 + 6 向短刻度（下线）。默认 Z_OVERLAY 档。
+		_sheet_played = FxFlipbookPool.play(&"sonic_ring", global_position,
+			{"scale_mult": _sheet_scale_mult(&"sonic_ring")}) != null
+	elif kind == "drum":
+		# 鼓震波（春雷鼓）：金紫 thunderclap 正好贴，z_ground 贴地（低于角色，不盖脚）。
+		# 替换 _draw_drum 的重环 + 8 放射震线 + 金心环（下线）。
+		_sheet_played = FxFlipbookPool.play(&"thunderclap", global_position,
+			{"z_ground": true, "scale_mult": _sheet_scale_mult(&"thunderclap")}) != null
+	elif kind == "seal":
+		# 坠印扬尘（巨印）：玄黄土调 ground_slam 顶替矢量重冲击环，z_ground 贴地；
+		# 扬尘环 + 10 尘点仍由 _draw_seal_dust 自绘（见该函数）。
+		_sheet_played = FxFlipbookPool.play(&"ground_slam", global_position,
+			{"z_ground": true, "scale_mult": _sheet_scale_mult(&"ground_slam")}) != null
 	visible = true
 	set_process(true)
+
+## 把「判定直径 = 2 * radius」换算成 sheet 的 scale_mult：目标世界直径 D → D / (frame_size.x * 基础scale)。
+## 与 FxFlipbookPool._spawn 的缩放口径一致（最终 scale = 基础scale * scale_mult）。
+## 说明：这几张 sheet 的可见环体约占画幅宽 88%，故实际环径略小于 D（约 0.88D）——
+## 宁可略小于判定边界，也不越界糊大（铁律 7 的保守侧）。
+func _sheet_scale_mult(id: StringName) -> float:
+	var conf: Dictionary = FxSheetData.get_config(id)
+	if conf.is_empty():
+		return 1.0
+	var fs: Vector2 = conf.get("frame_size", Vector2.ONE)
+	var base: float = float(conf.get("scale", 1.0))
+	return (radius * 2.0) / maxf(1.0, fs.x * base)
 
 ## 命中首拍材质微粒（由 ThunderBurst._deal_damage 在确认 hits>0 后调用一次）。
 ## 与 ThunderBurst 自己的雷光碎屑二选一：雷系走 lightning，其余形态走各自元素，
@@ -137,6 +178,14 @@ func _draw_fire_rain() -> void:
 			_draw_flame_drop(pos, s, 0.95)
 		else:
 			# 落点后余烬：带透视压扁贴地淡出
+			# 2026-11-07 车道 B：首枚（i=0，5 枚里落点最近中心的那枚）落点当拍起一张 fire_ring 贴图，
+			# 其余四枚仍走矢量火核/余烬 —— 只给首枚，逐枚播 sheet 会连环撞帧闸（见 FIRE_RING_SCALE_MULT）。
+			# play() 判空静默放弃（被 16px 重叠/帧预算丢弃时该枚退回矢量余烬）。
+			# 回退 = 删掉下面 if 块，本形态即回到纯矢量多枚小爆。
+			if i == 0 and not _fire_ring_played:
+				_fire_ring_played = true
+				FxFlipbookPool.play(&"fire_ring", to_global(land),
+					{"scale_mult": FIRE_RING_SCALE_MULT})
 			var fade := 1.0 - clampf((_t - delay - fall_dur) / (DUR - fall_dur), 0.0, 1.0)
 			if fade > 0.0:
 				var c := Color(1.0, 0.55, 0.2, 0.5 * fade)
@@ -196,7 +245,12 @@ func _draw_frost_footprint() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 ## 音波：三重细环递进扩散（音笛是声波不是雷，贴地环状推进）
+## 2026-11-07 车道 B：主形态改由 sonic_ring 序列帧承担（见 activate_fx），
+## 三重矢量环 + 环上 6 向短刻度一并下线。_sheet_played 时早退不画矢量层；
+## 被帧闸丢弃时回退到下面原矢量实现。回退 = 删掉下一行早退即复活纯矢量音波。
 func _draw_sonic() -> void:
+	if _sheet_played:
+		return
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 	for i in SONIC_RINGS:
 		var p: float = clampf((_t - float(i) * 0.07) / 0.24, 0.0, 1.0)
@@ -214,7 +268,12 @@ func _draw_sonic() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 ## 鼓震：一记重环砸开 + 8 条放射震线（春雷滚滚的闷击感，贴地压扁展开）
+## 2026-11-07 车道 B：主形态改由 thunderclap 序列帧承担（见 activate_fx，z_ground 贴地），
+## 矢量重环 + 8 放射震线 + 金心环一并下线。_sheet_played 时早退不画矢量层；
+## 被帧闸丢弃时回退到下面原矢量实现。回退 = 删掉下一行早退即复活纯矢量鼓震。
 func _draw_drum() -> void:
+	if _sheet_played:
+		return
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 	var p: float = clampf(_t / 0.3, 0.0, 1.0)
 	var a := 0.85 * (1.0 - p)
@@ -293,15 +352,19 @@ func _draw_earth_footprint() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 ## 坠印扬尘（巨印落点形态，2026-10-15 重构）：一记快速砸开的重冲击环压场 + 贴地扬尘环
+## 2026-11-07 车道 B：重冲击环改由 ground_slam 序列帧承担（见 activate_fx，z_ground 贴地）；
+## 扬尘环 + 10 尘点保留（坠印的「压」感靠尘，尘点同时是表现粒子/点绘，不删）。
+## 被帧闸丢弃时回退到下面原矢量冲击环。回退 = 删掉 `if not _sheet_played:` 与其缩进即复活纯矢量重冲击环。
 func _draw_seal_dust() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 	var fade := 1.0 - clampf((_t - 0.22) / (DUR - 0.22), 0.0, 1.0)
 	# 重冲击环：0.16s 内从爆心砸到判定内缘，粗→细快速收细，给出「重物落地的第一拍」（接 FX_HDR_CORE 起辉）
-	var slam_p: float = clampf(_t / 0.16, 0.0, 1.0)
-	if slam_p > 0.0 and slam_p < 1.0:
-		var slam_r := radius * (0.15 + 0.75 * slam_p)
-		draw_arc(Vector2.ZERO, slam_r, 0.0, TAU, 44,
-			GameStyle.FX_HDR_CORE, 6.5 - 4.5 * slam_p)
+	if not _sheet_played:
+		var slam_p: float = clampf(_t / 0.16, 0.0, 1.0)
+		if slam_p > 0.0 and slam_p < 1.0:
+			var slam_r := radius * (0.15 + 0.75 * slam_p)
+			draw_arc(Vector2.ZERO, slam_r, 0.0, TAU, 44,
+				GameStyle.FX_HDR_CORE, 6.5 - 4.5 * slam_p)
 	# 低扬尘环：冲击环过后贴地翻起，慢速外扩
 	var p: float = clampf(_t / 0.3, 0.0, 1.0)
 	var a := 0.4 * (1.0 - p)

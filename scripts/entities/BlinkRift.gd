@@ -94,8 +94,24 @@ func _reset(pos: Vector2, duration: float, col: Color, rad: float, md: int) -> v
 	_redraw_timer = 0.0
 	global_position = pos
 	visible = true
+	# pixelfx 接入点（回退：注释下一行）：符环起手帧在落点/起点地面垫一层 summon_circle。
+	_play_summon_sheet(pos)
 	set_process(true)
 	queue_redraw()
+
+## pixelfx 接入点（2026-11-07）：三拍各自在起手帧垫一层 summon_circle 序列帧（z_ground=true 压底），
+## 现有矢量符环（外环收拢/内环/刻度）留在视觉上层，仍是判定同源读数（半径是表现读数，不参与判定）。
+##   起手吸积（ORIGIN，起点）  —— 抽离起手播一次，读「本尊正被拽走」；
+##   落地爆闪（ARRIVAL，落点） —— 落地瞬间播一次，读「它到了」；
+##   落点预告（DEST，落点）    —— 普通/精英档唯一一拍，也在起手帧播一次（0.7）。
+## Boss 档跳过 DEST：它与落地爆闪落在同一点，两拍都播会在同处叠出两层符阵（不硬凑）。
+## 起点/落点是两个不同位置（且不同帧），不会相撞 FxFlipbookPool 的 16px 重叠闸；
+## 同帧多只怪闪现时按帧闸（≤5/物理帧）自然错峰，超出返回 null 即静默放弃（矢量符环仍是主体读数）。
+func _play_summon_sheet(pos: Vector2) -> void:
+	if heavy and mode == Mode.DEST:
+		return
+	var mult := 1.0 if heavy else 0.7
+	FxFlipbookPool.play(&"summon_circle", pos, {"z_ground": true, "scale_mult": mult})
 
 ## 外部取消（宿主伏诛/回合末消散/定身打断）：立即回池，不留无主符环。
 func cancel() -> void:

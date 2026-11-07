@@ -1,0 +1,20 @@
+{
+  "id": "explosions/plasma-explosion",
+  "out_name": "kill_blast",
+  "frame_size": [
+    224,
+    200
+  ],
+  "pivot": [
+    112,
+    100
+  ],
+  "anchor": "center",
+  "scale": 0.6,
+  "fps": 24,
+  "loop": false,
+  "frames_count": 22,
+  "palette_key": "ember",
+  "png_bytes": 217556,
+  "vram_kb": 4375
+}

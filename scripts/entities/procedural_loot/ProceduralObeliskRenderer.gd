@@ -1,8 +1,22 @@
 class_name ProceduralObeliskRenderer
 extends Node2D
 
-## 九天锁灵悬晶大阵 · 程序化矢量渲染器（空洞冷冽国风）
-## 涵盖半径 85px 八卦外环阵盘、中央悬浮三段玄晶柱、充能聚灵流光与耗尽灰相
+## 九天锁灵悬晶大阵 · 程序化渲染器（2026-11-07「去花」修订：常驻特效全下线，静态庄重）
+##
+## 用户口径：祭坛是一直都在的东西，循环特效堆满一屏太花。本版只留结构与功能读数：
+##   ① 暗玉底盘（地面层，压扁 0.30，静态）
+##   ② 外界环（正圆直立，范围读数主体——画多大 == 判多大；玩家在场提亮一档）
+##   ③ 阶数徽印（骑环金菱/金点，静态，随灵脉阶增减）
+##   ④ 三层玄石基座 + 供金槽收讫回执
+##   ⑤ 悬浮白玉晶柱（轻微悬浮呼吸；充能烤金/供金饮金/激活闪白/耗尽石化四态保留）
+## 已下线（同日两版折腾的教训）：pixelfx rune_circle 符环 / blessing_cone 充能天光 /
+## 巡游追光 / 12 格充能刻度 / 充能向心灵气臂 / 升灵光柱与待机灵息柱 / 随侍悬晶绕行 /
+## 星芒闪 / 呼吸光池——常驻 loop 全撤；充能反馈收敛到宿主三处读数契约 + 充能粒子 + 灯光。
+##
+## 取色铁律（2026-11-07 用户口径「去绿」）：本渲染器一律用固定鎏金/玉白系
+## （GameStyle.AURUM / JADE / 自定玉白），**不读主题三件套**——祭坛的鎏金是「供金」
+## 语义色，跟玩家主题变荧绿/品红会语义错乱（旧版跟主题走正是「绿圈」观感的根源）。
+## 阶数只抬亮度和金浓度，不改色相。
 
 ## 重绘节流（2026-10-15 性能优化）：全场 3 座界碑常驻，原 _process 每帧无条件 queue_redraw()，
 ## 且 BlessingObelisk 每帧写 ring_rotation 在 setter 又 queue_redraw()（一帧两度标脏）。
@@ -12,6 +26,24 @@ extends Node2D
 const REDRAW_INTERVAL := 0.05
 ## 激活闪白时长（秒）：晶柱瞬间超白过曝后回落
 const FLASH_DUR := 0.16
+
+## —— 阵盘几何 ——
+## 外界环半径（正圆直立）：贴 95px 判定圈内缘，范围读数主体（画多大 == 判多大）
+const ARRAY_R := 85.0
+## 地面层压扁系数：贴地阵盘的透视口径
+const ARRAY_SQUASH := 0.30
+## 玉盘半径：略小于界环（85px），盘沿悬在界环内一点
+const DISC_R := 74.0
+
+## —— 鎏金语义色（固定，不随主题；唯一取色入口 GameStyle 的世界特效金）——
+const AURUM := Color("ffc94d")            ## 暖金：阵盘主色（供金）
+const AURUM_EDGE := Color("ffe9b0")       ## 暖金亮边：追光/徽印高光
+const AURUM_DIM := Color(0.40, 0.30, 0.12)  ## 暗金：衬线/未点亮刻度
+## —— 玉白晶柱（冷白玉；充能时烤向鎏金）——
+const GEM_DARK := Color(0.07, 0.15, 0.28, 0.96)
+const GEM_MID := Color(0.22, 0.50, 0.76, 0.96)
+const GEM_LIGHT := Color(0.70, 0.92, 1.0, 0.98)
+const GEM_RIDGE := Color(0.93, 0.98, 1.0, 0.96)
 
 var _draw_phase: float = 0.0
 var _dirty: bool = true
@@ -40,7 +72,7 @@ var infuse_ratio: float = 0.0:
 		_dirty = true
 
 ## 灵脉阶（1~4，2026-11-02 祭坛成长线）：由 BlessingObelisk 按「波次 + 启动次数」灌入。
-## 只改常驻形态（晶柱高度/宽度/悬晶数/阵盘内环/颜色），不碰充能/供金/耗尽的时间轴。
+## 只改常驻形态（晶柱高度/宽度/徽印档位/颜色），不碰充能/供金/耗尽的时间轴。
 @export var tier: int = 1:
 	set(val):
 		var t := clampi(val, 1, 4)
@@ -53,6 +85,7 @@ var infuse_ratio: float = 0.0:
 		fill_ratio = clampf(val, 0.0, 1.0)
 		# 灌灵进度平滑累加，由 20Hz/满帧节流自然呈现，不再每帧直接 queue_redraw
 
+## 旧阵盘自转的外部分量（宿主每帧仍在喂，渲染已不读——「去花」后阵盘无自转元素，仅兼容保留）
 @export var ring_rotation: float = 0.0:
 	set(val):
 		ring_rotation = val
@@ -95,226 +128,96 @@ func _draw() -> void:
 		_draw_spent_look()
 		return
 
-	_draw_altar_ground_runes()
-	_draw_charge_column()
-	_draw_floating_crystal_spire()
+	_draw_ground_disc()
+	_draw_array_halo()
+	_draw_crystal_spire()
 
 # ==============================================================================
-# 1. 地面八方阵盘（Rune Circle - 精确对应 85px 判定范围）
+# 1. 暗玉底盘（地面层 · 压扁 0.30，静态）：托住基座的暗底，给祭坛一片「占地」
 # ==============================================================================
-func _draw_altar_ground_runes() -> void:
-	var r_outer: float = 85.0
-	var r_inner: float = 52.0
-	var r_center: float = 24.0
-
-	var alpha_base: float = 0.35 if is_player_inside else 0.18
-	if is_charging:
-		alpha_base = 0.55 + sin(_time * 12.0) * 0.15
-	# 熄灭形变：阵盘整体淡出
-	alpha_base *= (1.0 - spent_blend)
-
-	# 阶数配色（2026-11-02）：青玉 → 鎏金渐变，4 阶最暖；新颜色统一从 GameStyle 取
-	var gold_mix: float = float(tier - 1) / 3.0 * 0.45
-	var main_rgb: Color = Color(0.25, 0.85, 1.0).lerp(GameStyle.GOLD, gold_mix)
-	var col_rune_main := Color(main_rgb, alpha_base)
-	var col_rune_gold := Color(1.0, 0.82, 0.30, alpha_base * 0.9)
-	var col_line_dim := Color(0.12, 0.35, 0.55, alpha_base * 0.5)
-
-	# 1.1 外阵环（受 ring_rotation 顺时针驱动）
-	draw_set_transform(Vector2.ZERO, ring_rotation, Vector2.ONE)
-
-	# 外同心双环（弧段自适应：85px 36 段、52px 24 段、24px 16 段，取代原 64/48/32 段）
-	draw_arc(Vector2.ZERO, r_outer, 0, TAU, 36, col_rune_main, 1.8, true)
-	draw_arc(Vector2.ZERO, r_outer - 4.0, 0, TAU, 36, col_line_dim, 1.0, true)
-	draw_arc(Vector2.ZERO, r_center, 0, TAU, 16, col_line_dim, 1.0, true)
-
-	# 阶数内环（2026-11-02）：2/3/4 阶各多一圈 66/72/78px 的符环 + 8 枚小刻点。
-	# 全部收在 85px 外径以内 —— 阵盘画多大 == 判定圈多大（判定 95px 不变，不制造假范围）。
-	for k in range(tier - 1):
-		var rr: float = 66.0 + 6.0 * float(k)
-		draw_arc(Vector2.ZERO, rr, 0, TAU, 28, Color(col_rune_main, alpha_base * 0.38), 1.0, true)
-		for m in range(8):
-			var ma: float = (TAU / 8.0) * float(m) + float(k) * 0.22
-			var mp := Vector2(cos(ma), sin(ma)) * rr
-			AdaptiveDraw.circle(self, mp, 1.2, Color(col_rune_gold, alpha_base * 0.8), 3.2)
-
-	# 3 阶起四正斜位大符印（45° 四枚菱形，仍在 85px 内）：高阶阵盘的「镇角」读数
-	if tier >= 3:
-		for k in range(4):
-			var ta: float = (TAU / 4.0) * float(k) + PI / 4.0
-			var tdir := Vector2(cos(ta), sin(ta))
-			var tp: Vector2 = tdir * (r_outer - 3.0)
-			draw_colored_polygon(PackedVector2Array([
-				tp + tdir * 5.0, tp + tdir.orthogonal() * 3.5,
-				tp - tdir * 5.0, tp - tdir.orthogonal() * 3.5,
-			]), col_rune_gold)
-
-	# 24 节气刻度：随充能进度逐段点亮（青→金），形成「阵盘被一路点燃」的扫描感
-	var lit: float = fill_ratio
-	for k in range(24):
-		var a_tick := (TAU / 24.0) * float(k)
-		var tdir := Vector2(cos(a_tick), sin(a_tick))
-		var is_major := (k % 3 == 0)
-		var tick_len := 5.0 if is_major else 3.0
-		# 该刻度是否已点亮：以进度扫过为界（起始角从 -PI/2 顺时针，与走针环同源起点）
-		var tick_frac := fposmod(a_tick + PI / 2.0, TAU) / TAU
-		var on: float = clampf((lit - tick_frac) / 0.12, 0.0, 1.0)
-		var col_tick := col_line_dim.lerp(Color(1.0, 0.9, 0.45, alpha_base), on) if is_charging else col_line_dim
-		draw_line(tdir * (r_outer + 1.5), tdir * (r_outer + 1.5 + tick_len), col_tick, 1.0)
-
-	# 1.25 四正位金铢符（2026-10-25 供金语义）：外方内圆的铜钱印，充能进度逐枚点亮成鎏金，
-	# 平时随灵息错相明灭 —— 抬眼就把「这阵是拿金币喂的」讲明白
-	for k in range(4):
-		var coin_ang := (TAU / 4.0) * float(k)
-		var coin_dir := Vector2(cos(coin_ang), sin(coin_ang))
-		var coin_pos := coin_dir * 36.0
-		var coin_frac := fposmod(coin_ang + PI / 2.0, TAU) / TAU
-		var lit_coin: float = clampf((lit - coin_frac) / 0.12, 0.0, 1.0)
-		var breathe: float = 0.55 + 0.45 * sin(_time * 2.0 + float(k) * 1.57)
-		var coin_a := lerpf(alpha_base * 0.5 * breathe, alpha_base * 1.6, lit_coin)
-		var coin_col := col_line_dim.lerp(Color(1.0, 0.85, 0.4), lit_coin)
-		# 外圆 + 内方孔（方孔用 4 段折线，凑「外圆内方」的铜钱印）
-		draw_arc(coin_pos, 4.2, 0, TAU, 12, Color(coin_col, coin_a), 1.4, true)
-		var sq := 1.7
-		draw_polyline(PackedVector2Array([
-			coin_pos + Vector2(-sq, -sq), coin_pos + Vector2(sq, -sq),
-			coin_pos + Vector2(sq, sq), coin_pos + Vector2(-sq, sq),
-			coin_pos + Vector2(-sq, -sq),
-		]), Color(coin_col, coin_a * 0.9), 1.0, true)
-
-	# 8 方位星宿卦爻刻印与引线
-	var num_nodes := 8
-	for i in range(num_nodes):
-		var angle := (TAU / float(num_nodes)) * float(i)
-		var dir := Vector2(cos(angle), sin(angle))
-
-		# 辐射引线
-		draw_line(dir * (r_inner + 4.0), dir * (r_outer - 6.0), col_line_dim, 1.0)
-
-		# 外圈节点菱形符印
-		var p_node := dir * (r_outer - 2.0)
-		var p_poly := PackedVector2Array([
-			p_node + dir * 3.5,
-			p_node + dir.orthogonal() * 2.5,
-			p_node - dir * 3.5,
-			p_node - dir.orthogonal() * 2.5
-		])
-		draw_colored_polygon(p_poly, col_rune_gold)
-
-		# 内圈小八卦短线
-		var p_mid := dir * r_inner
-		draw_line(p_mid - dir.orthogonal() * 3.0, p_mid + dir.orthogonal() * 3.0, col_rune_main, 1.5)
-
-	# 恢复原点变换
+func _draw_ground_disc() -> void:
+	var alive := 1.0 - spent_blend
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, ARRAY_SQUASH))
+	AdaptiveDraw.circle(self, Vector2.ZERO, DISC_R, Color(0.05, 0.08, 0.13, 0.22 * alive))
+	AdaptiveDraw.circle(self, Vector2.ZERO, 44.0, Color(0.07, 0.11, 0.17, 0.16 * alive))
+	# 盘缘暗金细环：底盘自己的边界，别让墨盘糊进地砖
+	draw_arc(Vector2.ZERO, DISC_R, 0, TAU, 48, Color(AURUM_DIM, 0.45 * alive), 1.0, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	# 1.2 内阵环（反向慢转）：与外环形成「天地阴阳对转」的齿轮感
-	draw_set_transform(Vector2.ZERO, ring_rotation * -0.6, Vector2.ONE)
-	var col_inner_ring := Color(0.35, 0.9, 1.0, alpha_base * 0.7)
-	draw_arc(Vector2.ZERO, r_inner, 0, TAU, 24, col_inner_ring, 1.4, true)
-	# 内环 6 枚小刻点
-	for m in range(6):
-		var ma := (TAU / 6.0) * float(m)
-		var mp := Vector2(cos(ma), sin(ma)) * r_inner
-		AdaptiveDraw.circle(self, mp, 1.4, col_rune_gold, 3.2)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-	# 1.3 充能时向心螺旋灵气丝（3 条臂，每臂 8 粒拖尾，向心加速吸入）
-	if is_charging:
-		var arm_count := 3
-		var dots_per_arm := 8
-		var warm: float = fill_ratio  # 随进度由青转金
-		var stream_col := Color(0.55, 0.95, 1.0, 1.0).lerp(Color(1.0, 0.9, 0.5, 1.0), warm)
-		for arm in range(arm_count):
-			var base_ang := (TAU / float(arm_count)) * float(arm) + _time * 3.2
-			for d in range(dots_per_arm):
-				# 沿臂的相位错开，形成向内收束的拖尾
-				var t_prog := fmod(_time * 2.2 + float(d) * 0.09 + float(arm) * 0.21, 1.0)
-				var cur_r := lerpf(r_outer - 3.0, r_center + 3.0, t_prog)
-				var ang := base_ang + t_prog * 2.2
-				var sdir := Vector2(cos(ang), sin(ang))
-				var a_dot := (1.0 - t_prog) * 0.85
-				var sz := 2.2 - 1.2 * t_prog
-				AdaptiveDraw.circle(self, sdir * cur_r, sz, Color(stream_col, a_dot), 3.2)
-				if t_prog > 0.55:
-					AdaptiveDraw.circle(self, sdir * cur_r, sz * 0.5, Color(1.0, 1.0, 0.92, a_dot), 3.2)
-
 # ==============================================================================
-# 1.5 升灵光柱：阵盘与悬晶之间自下而上升起的柔和梯形光柱（高度 ∝ fill_ratio）
+# 2. 外界环（正圆直立，静态）：范围读数主体 + 阶数徽印
+#    玩家在场提亮一档，是「你站进范围了」的功能反馈，不做常驻动画
 # ==============================================================================
-func _draw_charge_column() -> void:
-	if fill_ratio <= 0.02 or spent_blend > 0.0:
+func _draw_array_halo() -> void:
+	var alive := 1.0 - spent_blend
+	if alive <= 0.01:
 		return
-	var h: float = (58.0 + 6.0 * float(tier - 1)) * fill_ratio
-	var pulse: float = 0.82 + 0.18 * sin(_time * 6.0)
-	var a_out: float = 0.30 * fill_ratio * pulse * (1.0 - spent_blend)
-	var a_core: float = 0.55 * fill_ratio * pulse * (1.0 - spent_blend)
-	# 底宽顶窄的柔和梯形（自碑基 y=8 向上）
-	var base_y: float = 8.0
-	var top_y: float = base_y - h
-	var w_base: float = 15.0
-	var w_top: float = 8.0
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(-w_base, base_y), Vector2(w_base, base_y),
-		Vector2(w_top, top_y), Vector2(-w_top, top_y)
-	]), Color(0.5, 0.9, 1.0, a_out))
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(-w_base * 0.4, base_y), Vector2(w_base * 0.4, base_y),
-		Vector2(w_top * 0.4, top_y), Vector2(-w_top * 0.4, top_y)
-	]), Color(GameStyle.FX_HDR_CORE, a_core))
+	var a_base: float = (0.56 if is_player_inside else 0.40) * alive
+
+	# 2.1 主界环双线：亮金主线 + 内衬暗线（「这是一圈结界」的唯一整圆）
+	draw_arc(Vector2.ZERO, ARRAY_R, 0.0, TAU, 56, Color(AURUM, a_base), 2.2, true)
+	draw_arc(Vector2.ZERO, ARRAY_R - 3.5, 0.0, TAU, 56, Color(AURUM_DIM, a_base * 0.5), 1.0, true)
+
+	# 2.2 阶数徽印（静态，骑在界环上）：2 阶四正位金菱、3 阶加四斜位金点、4 阶菱芯加白
+	#     高阶阵盘的「镇环」读数，全在 95px 判定圈之内
+	if tier >= 2:
+		for k in range(4):
+			var da := TAU * float(k) / 4.0
+			var dpos := Vector2(cos(da), sin(da)) * ARRAY_R
+			draw_colored_polygon(PackedVector2Array([
+				dpos + Vector2(4.2, 0), dpos + Vector2(0, 4.2),
+				dpos + Vector2(-4.2, 0), dpos + Vector2(0, -4.2),
+			]), Color(AURUM, minf(a_base * 1.6, 1.0)))
+			if tier >= 4:
+				AdaptiveDraw.circle(self, dpos, 1.7, Color(1.0, 0.98, 0.9, minf(a_base * 2.0, 1.0)), 3.2)
+		if tier >= 3:
+			for k in range(4):
+				var da2 := TAU * float(k) / 4.0 + PI / 4.0
+				var dpos2 := Vector2(cos(da2), sin(da2)) * ARRAY_R
+				AdaptiveDraw.circle(self, dpos2, 1.5, Color(AURUM_EDGE, minf(a_base * 1.4, 1.0)), 3.2)
 
 # ==============================================================================
-# 2. 中央悬浮玄晶灵塔（Floating Void Crystal Spire）
+# 3. 白玉玄晶柱（直立）：三层玄石基座 + 悬浮晶柱
 # ==============================================================================
 
-## 主晶悬浮中心（本地坐标）：供水晶灵光日轮 / 环绕火苗跟随同一颗水晶的呼吸。
-## 与 _draw_floating_crystal_spire 的 bob_y 同一公式，改一处即两处同步。
+## 主晶悬浮中心（本地坐标）：晶柱悬浮呼吸的锚点。
+## 与 _draw_crystal_spire 的 bob_y 同一公式，改一处即两处同步。
 func crystal_core_position() -> Vector2:
 	var bob_amp: float = 3.5 * (1.0 - spent_blend)
 	var bob_y: float = sin(_time * 2.2) * bob_amp - 12.0 + spent_blend * 6.0 - fill_ratio * 4.0
 	return Vector2(0.0, bob_y)
 
-func _draw_floating_crystal_spire() -> void:
-	# 悬浮微动（1.6Hz 正弦）；熄灭形变时下沉收敛；充能灌灵时整柱缓缓上升
+func _draw_crystal_spire() -> void:
 	var core_pos := crystal_core_position()
+	var alive := 1.0 - spent_blend
 
-	# 2.0 地面落影（2026-10-18 补）：双层软影垫在基座下，悬浮玄晶有落点；随阶数变大
-	_draw_ground_shadow(Vector2(0, 12), 26.0 + 3.0 * float(tier - 1), 6.0 + 0.5 * float(tier - 1), 0.5)
+	# 5.0 地面落影：双层软影垫在基座下，悬浮玄晶有落点；随阶数变大
+	_draw_ground_shadow(Vector2(0, 12), 26.0 + 3.0 * float(tier - 1), 6.5 + 0.5 * float(tier - 1), 0.5)
 
-	# 2.1 阵台玄铁基座（2026-10-25 精致化：双层玄铁 + 正面三枚金槽）——紧贴地面；随阶数加宽
-	var base_w: float = 22.0 + 2.0 * float(tier - 1)
-	var base_poly := PackedVector2Array([
-		Vector2(-base_w, 6),
-		Vector2(base_w, 6),
-		Vector2(base_w * 0.72, 14),
-		Vector2(-base_w * 0.72, 14)
-	])
-	draw_colored_polygon(base_poly, Color(0.08, 0.10, 0.15, 0.95))
-	draw_polyline(base_poly, Color(0.28, 0.38, 0.50, 0.9), 1.3, true)
-	# 下层加宽的承重沿（双层基座，比单层厚一档的体量感）
-	var base_low := PackedVector2Array([
-		Vector2(-base_w * 1.18, 14),
-		Vector2(base_w * 1.18, 14),
-		Vector2(base_w * 0.86, 19),
-		Vector2(-base_w * 0.86, 19)
-	])
-	draw_colored_polygon(base_low, Color(0.06, 0.08, 0.12, 0.95))
-	draw_polyline(base_low, Color(0.22, 0.30, 0.42, 0.85), 1.2, true)
-	# 基座符文凹槽微光（熄灭时随之暗下）
-	var slot_a: float = (0.5 + sin(_time * 3.0) * 0.2) * (1.0 - spent_blend)
-	draw_line(Vector2(-base_w * 0.64, 10), Vector2(base_w * 0.64, 10), Color(_tier_rune_rgb(), slot_a), 1.5)
+	# 5.1 三层玄石基座（下宽上窄，承晶台收顶）：窄一号才读作「坛座」，宽了像跑道（首版教训）
+	var bw: float = 24.0 + 2.5 * float(tier - 1)
+	_base_layer(11.0, 17.0, bw * 0.76, bw, Color(0.07, 0.09, 0.14, 0.96), Color(0.26, 0.32, 0.42, 0.9))
+	_base_layer(5.5, 11.0, bw * 0.56, bw * 0.72, Color(0.09, 0.12, 0.18, 0.96), Color(0.34, 0.40, 0.52, 0.9))
+	_base_layer(1.5, 5.5, bw * 0.38, bw * 0.50, Color(0.11, 0.15, 0.22, 0.96), Color(0.42, 0.50, 0.62, 0.9))
+	# 层间金缝微光（静态）：鎏金坛身的「缝里漏光」
+	var seam_a: float = 0.34 * alive
+	draw_line(Vector2(-bw * 0.54, 5.5), Vector2(bw * 0.54, 5.5), Color(AURUM, seam_a), 1.1)
+	draw_line(Vector2(-bw * 0.70, 11.0), Vector2(bw * 0.70, 11.0), Color(AURUM_DIM, seam_a * 0.8), 1.0)
+	# 承晶台光池：晶柱从一团亮金里长出来，接住悬浮感（也把晶柱底尖从暗座里托出来）
+	AdaptiveDraw.circle(self, Vector2(0, 3.0), 10.5, Color(AURUM, 0.26 * alive), 3.2)
+	AdaptiveDraw.circle(self, Vector2(0, 3.0), 5.5, Color(AURUM_EDGE, 0.30 * alive), 3.2)
 	# 正面三枚供金槽（金铢落位的小圆印，注入比越高越亮 —— 供金的「收讫回执」）
-	var slot_step: float = 10.0 + 1.5 * float(tier - 1)
+	var slot_step: float = 7.5 + 1.5 * float(tier - 1)
 	for s_i in range(3):
 		var slot_x: float = -slot_step + slot_step * float(s_i)
-		var slot_col := Color(0.55, 0.60, 0.35, 0.4 * (1.0 - spent_blend))
+		var slot_col := Color(0.55, 0.48, 0.28, 0.4 * alive)
 		if infuse_ratio > 0.0:
-			slot_col = slot_col.lerp(Color(1.0, 0.85, 0.4, 0.95 * (1.0 - spent_blend)), infuse_ratio)
-		AdaptiveDraw.circle(self, Vector2(slot_x, 16.2), 1.8 + 0.2 * float(tier - 1), slot_col, 3.2)
+			slot_col = slot_col.lerp(Color(1.0, 0.85, 0.4, 0.95 * alive), infuse_ratio)
+		AdaptiveDraw.circle(self, Vector2(slot_x, 8.4), 1.8 + 0.2 * float(tier - 1), slot_col, 3.2)
 
-	# 2.2 悬浮中央主晶（2026-10-25 由 48 拔高到 64px；2026-11-02 随灵脉阶继续拔高/加宽）
+	# 5.2 悬浮白玉主晶（2026-11-07 重绘：玉白冷调 + 去整圈硬描边，只留受光棱）
 	var spire_h: float = (64.0 + 12.0 * float(tier - 1)) * (1.0 - spent_blend * 0.35)
-	var spire_w: float = 18.0 + 3.0 * float(tier - 1)
+	var spire_w: float = 16.0 + 3.0 * float(tier - 1)
 	var hw: float = spire_w * 0.5
 	var top := core_pos + Vector2(0, -spire_h * 0.6)
 	var bottom := core_pos + Vector2(0, spire_h * 0.4)
@@ -323,25 +226,20 @@ func _draw_floating_crystal_spire() -> void:
 	var right := Vector2(hw, mid_y)
 	var ridge := core_pos + Vector2(0, 1.0)
 
-	# 主晶色彩定义
-	var col_dark := Color(0.08, 0.16, 0.28, 0.95)
-	var col_mid := Color(0.18, 0.45, 0.68, 0.95)
-	var col_light := Color(0.40, 0.85, 1.0, 0.98)
-	var col_ridge := Color(0.85, 0.96, 1.0, 0.95)
-
-	# 阶数金混（2026-11-02）：越后期晶面越暖，4 阶带明显鎏金边（充能/供金/耗尽仍按原时间轴覆盖）
+	# 玉白主色（阶数只抬金浓度：越后期晶面越暖，4 阶带明显鎏金边）
 	var tier_gold: float = float(tier - 1) / 3.0
-	col_light = col_light.lerp(GameStyle.GOLD_EDGE, tier_gold * 0.22)
-	col_ridge = col_ridge.lerp(GameStyle.GOLD_EDGE, tier_gold * 0.30)
-	col_mid = col_mid.lerp(GameStyle.GOLD.darkened(0.35), tier_gold * 0.12)
+	var col_dark := GEM_DARK
+	var col_mid := GEM_MID.lerp(Color(0.52, 0.48, 0.30), tier_gold * 0.18)
+	var col_light := GEM_LIGHT.lerp(GameStyle.AURUM_EDGE, tier_gold * 0.30)
+	var col_ridge := GEM_RIDGE.lerp(GameStyle.AURUM_EDGE, tier_gold * 0.35)
 
-	# 灌灵高度对应的炽金/青白能量色
-	var glow_power: float = fill_ratio
+	# 充能灌灵：晶面自玉白烤向鎏金（进度即炉温）
 	if is_charging:
+		var glow_power: float = fill_ratio
 		col_light = col_light.lerp(Color(1.0, 0.92, 0.55), glow_power * 0.85)
 		col_ridge = col_ridge.lerp(Color(1.0, 1.0, 0.85), glow_power * 0.9)
 
-	# 供金饮金（2026-10-25）：注入期间晶面向鎏金过渡 —— 供进来的钱「看得见」
+	# 供金饮金：注入期间晶面向鎏金过渡 —— 供进来的钱「看得见」
 	if infuse_ratio > 0.0:
 		var gold := Color(1.0, 0.84, 0.42)
 		col_mid = col_mid.lerp(gold.darkened(0.15), infuse_ratio * 0.55)
@@ -371,9 +269,12 @@ func _draw_floating_crystal_spire() -> void:
 	draw_colored_polygon(PackedVector2Array([left, ridge, bottom]), col_dark)  # 下左（暗面）
 	draw_colored_polygon(PackedVector2Array([ridge, right, bottom]), col_mid.darkened(0.2))  # 下右（透光）
 
-	# 中脊高光与锋刃
-	draw_line(top, bottom, col_ridge, 1.3, true)
-	draw_polyline(PackedVector2Array([top, right, bottom, left, top]), Color(0.55, 0.85, 1.0, 0.9 * (1.0 - spent_blend)), 1.2, true)
+	# 中脊高光 + 受光右棱 + 左半面内切棱（三线把「多切面晶体」读出来，不再描整圈硬边）
+	draw_line(top, bottom, col_ridge, 1.2, true)
+	draw_line(top.lerp(right, 0.2), right.lerp(bottom, 0.5), Color(col_ridge, 0.55 * alive), 1.0, true)
+	draw_line(left, ridge.lerp(bottom, 0.35), Color(col_mid.lightened(0.25), 0.5 * alive), 1.0, true)
+	# 顶尖光珠
+	AdaptiveDraw.circle(self, top, 1.8, Color(col_ridge, 0.9 * alive), 3.2)
 
 	# 灌灵液面（自下而上注入）；熄灭形变时不画
 	if fill_ratio > 0.02 and spent_blend < 0.05:
@@ -382,38 +283,24 @@ func _draw_floating_crystal_spire() -> void:
 		draw_line(Vector2(-hw * (1.0 - fill_ratio * 0.3), fill_y), Vector2(hw * (1.0 - fill_ratio * 0.3), fill_y), fill_col, 2.0)
 		AdaptiveDraw.circle(self, Vector2(0, fill_y), 2.5, Color(1.0, 1.0, 0.9, 0.95), 3.2)
 
-	# 供金金脉（2026-10-25）：注入比越高，金线自基座沿晶面爬得越高 —— 钱化灵的实际进度
+	# 供金金脉：注入比越高，金线自基座沿晶面爬得越高 —— 钱化灵的实际进度
 	if infuse_ratio > 0.02 and spent_blend < 0.05:
 		var vein_y: float = lerpf(bottom.y, top.y, infuse_ratio * 0.85)
 		draw_line(Vector2(-hw * 0.45, vein_y + 4.0), Vector2(hw * 0.5, vein_y), Color(1.0, 0.86, 0.45, 0.85), 1.3, true)
 		AdaptiveDraw.circle(self, Vector2(hw * 0.5, vein_y), 1.8, Color(1.0, 0.95, 0.8, 0.9), 3.2)
 
-	# 2.3 三枚随侍悬晶（左、右环绕 + 顶上悬珠一枚）；熄灭时收拢淡出
-	if spent_blend < 0.5:
-		var orb_alpha: float = 1.0 - spent_blend * 2.0
-		var orb_angle := _time * 2.0
-		var orb_dist := lerpf(20.0, 6.0, spent_blend)
-		var p_left_orb := core_pos + Vector2(cos(orb_angle) * orb_dist, sin(orb_angle) * 5.0 - 4.0)
-		var p_right_orb := core_pos + Vector2(cos(orb_angle + PI) * orb_dist, sin(orb_angle + PI) * 5.0 - 4.0)
-		_draw_mini_floating_gem(p_left_orb, Color(col_light, orbit_a(col_light, orb_alpha)), Color(col_ridge, orbit_a(col_ridge, orb_alpha)))
-		_draw_mini_floating_gem(p_right_orb, Color(col_light, orbit_a(col_light, orb_alpha)), Color(col_ridge, orbit_a(col_ridge, orb_alpha)))
-		# 顶上悬珠（2026-10-25 加第三枚）：主晶顶尖之上的小菱晶，随灵息缓摆
-		var p_top_orb := core_pos + Vector2(sin(_time * 1.3) * 4.0, -spire_h * 0.62 - 10.0)
-		_draw_mini_floating_gem(p_top_orb, Color(col_light, orbit_a(col_light, orb_alpha)), Color(col_ridge, orbit_a(col_ridge, orb_alpha)))
-		# 阶数追加悬晶（2026-11-02）：2/3/4 阶各 +1/+2/+3 枚，错相绕行；1 阶保持原三枚
-		for e_i in range(tier - 1):
-			var ea: float = _time * 1.5 + TAU * float(e_i) / float(maxi(tier - 1, 1)) + PI * 0.25
-			var e_dist: float = 22.0 + 3.0 * float(e_i)
-			var p_extra := core_pos + Vector2(cos(ea) * e_dist, sin(ea) * e_dist * 0.45 - 6.0 - 2.5 * float(e_i))
-			_draw_mini_floating_gem(p_extra, Color(col_light, orbit_a(col_light, orb_alpha)), Color(col_ridge, orbit_a(col_ridge, orb_alpha)))
-
-## 取色并套上整体透明度的辅助（保留原色 RGB，只压 alpha）
-func orbit_a(c: Color, mul: float) -> float:
-	return c.a * clampf(mul, 0.0, 1.0)
-
-## 灵脉阶主色（青玉 → 鎏金）：阵盘/基座凹槽/悬晶共用同一条取色（GameStyle 唯一入口）
-func _tier_rune_rgb() -> Color:
-	return Color(0.25, 0.85, 1.0).lerp(GameStyle.GOLD, float(tier - 1) / 3.0 * 0.45)
+## 单层基座梯形：面 + 闭合棱线（上窄下宽，立面读作石头）
+func _base_layer(y_top: float, y_bot: float, w_top: float, w_bot: float, face: Color, edge: Color) -> void:
+	var pts := PackedVector2Array([
+		Vector2(-w_top, y_top), Vector2(w_top, y_top),
+		Vector2(w_bot, y_bot), Vector2(-w_bot, y_bot),
+	])
+	draw_colored_polygon(pts, face)
+	draw_polyline(PackedVector2Array([
+		Vector2(-w_top, y_top), Vector2(w_top, y_top),
+		Vector2(w_bot, y_bot), Vector2(-w_bot, y_bot),
+		Vector2(-w_top, y_top),
+	]), edge, 1.1, true)
 
 ## 双层软地影（2026-10-18 阴影统一升级）：外层弥散 + 内层接触暗核，与全场实体同一画法。
 ## 无 draw_filled_ellipse 辅助，本地以 16 边多边形近似压扁椭圆。
@@ -428,45 +315,29 @@ func _draw_ground_shadow(pos: Vector2, rx: float, ry: float, alpha: float) -> vo
 		var depth := 1.0 if layer == 0 else 0.4
 		draw_colored_polygon(pts, Color(0.04 * depth, 0.05 * depth, 0.08 * depth, a))
 
-func _draw_mini_floating_gem(pos: Vector2, c_main: Color, c_ridge: Color) -> void:
-	var gw: float = 4.5
-	var gh: float = 8.0
-	var pts := PackedVector2Array([
-		pos + Vector2(0, -gh * 0.5),
-		pos + Vector2(gw * 0.5, 0),
-		pos + Vector2(0, gh * 0.5),
-		pos + Vector2(-gw * 0.5, 0)
-	])
-	draw_colored_polygon(pts, c_main)
-	draw_line(pos + Vector2(0, -gh * 0.5), pos + Vector2(0, gh * 0.5), c_ridge, 1.0)
-
 # ==============================================================================
-# 3. 耗尽沉寂态（Spent / Inactive Look）
+# 4. 耗尽沉寂态（Spent / Inactive Look）：熄灭的界环残线 + 暗盘残痕 + 灰岩基座 + 石化晶
 # ==============================================================================
 func _draw_spent_look() -> void:
-	# 阵盘残痕（冷灰，比原稿提亮一档：暗底上要还能看出「这儿有座用掉的碑」）
-	draw_arc(Vector2.ZERO, 85.0, 0, TAU, 36, Color(0.34, 0.40, 0.46, 0.28), 1.2, true)
-	draw_arc(Vector2.ZERO, 52.0, 0, TAU, 24, Color(0.30, 0.36, 0.42, 0.22), 1.0, true)
-	# 高阶残环（2026-11-02）：用过的祭坛也保留阶数读数，2/3/4 阶各多一圈灰环
-	for k in range(tier - 1):
-		draw_arc(Vector2.ZERO, 66.0 + 6.0 * float(k), 0, TAU, 24,
-			Color(0.32, 0.38, 0.44, 0.18), 1.0, true)
+	# 暗盘残痕（压扁平面）：比原稿提亮一档——暗底上要还能看出「这儿有座用掉的阵」
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, ARRAY_SQUASH))
+	AdaptiveDraw.circle(self, Vector2.ZERO, DISC_R, Color(0.05, 0.06, 0.09, 0.28))
+	draw_arc(Vector2.ZERO, DISC_R, 0, TAU, 48, Color(0.30, 0.28, 0.22, 0.22), 1.0, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	# 熄灭的界环残线（正圆，比活着时细一档暗一档）
+	draw_arc(Vector2.ZERO, ARRAY_R, 0, TAU, 56, Color(0.34, 0.33, 0.30, 0.22), 1.4, true)
 
 	# 地面落影（耗尽态同样垫底；随阶数变大）
-	_draw_ground_shadow(Vector2(0, 12), 26.0 + 3.0 * float(tier - 1), 6.0 + 0.5 * float(tier - 1), 0.45)
+	_draw_ground_shadow(Vector2(0, 12), 26.0 + 3.0 * float(tier - 1), 6.5 + 0.5 * float(tier - 1), 0.45)
 
-	# 基座与落座残石（灰岩质感：面提亮、棱描边）；随阶数加宽
-	var base_w: float = 22.0 + 2.0 * float(tier - 1)
-	var base_poly := PackedVector2Array([
-		Vector2(-base_w, 6),
-		Vector2(base_w, 6),
-		Vector2(base_w * 0.72, 14),
-		Vector2(-base_w * 0.72, 14)
-	])
-	draw_colored_polygon(base_poly, Color(0.20, 0.23, 0.27, 0.95))
-	draw_polyline(base_poly, Color(0.40, 0.45, 0.50, 0.85), 1.2, true)
+	# 三层基座（灰岩质感：面提亮、棱描边）；随阶数加宽，几何与鲜活态同一条 _base_layer 链
+	var bw: float = 24.0 + 2.5 * float(tier - 1)
+	_base_layer(11.0, 17.0, bw * 0.76, bw, Color(0.17, 0.19, 0.22, 0.96), Color(0.36, 0.40, 0.45, 0.85))
+	_base_layer(5.5, 11.0, bw * 0.56, bw * 0.72, Color(0.19, 0.21, 0.25, 0.96), Color(0.40, 0.44, 0.50, 0.85))
+	_base_layer(1.5, 5.5, bw * 0.38, bw * 0.50, Color(0.21, 0.23, 0.27, 0.96), Color(0.44, 0.48, 0.54, 0.85))
 
-	# 灵晶下落沉入基台且失去光泽（石灰色 + 冷高光棱线，读得出是块石化晶石）；高阶残晶更高更宽
+	# 灵晶下落沉入承晶台且失去光泽（石灰色 + 冷高光棱线，读得出是块石化晶石）；高阶残晶更高更宽
 	var resting_pos := Vector2(0, -6.0)
 	var stone_h: float = 20.0 + 4.0 * float(tier - 1)
 	var stone_w: float = 8.0 + 1.5 * float(tier - 1)
@@ -474,7 +345,6 @@ func _draw_spent_look() -> void:
 		resting_pos + Vector2(0, -stone_h),
 		resting_pos + Vector2(stone_w, 6),
 		resting_pos + Vector2(0, 14),
-		resting_pos + Vector2(-stone_w, 6)
 	])
 	draw_colored_polygon(pts, Color(0.33, 0.36, 0.41, 0.96))
 	# 左半面压暗，留一点体积感

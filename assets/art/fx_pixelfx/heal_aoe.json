@@ -1,0 +1,20 @@
+{
+  "id": "holy/heal-aoe",
+  "out_name": "heal_aoe",
+  "frame_size": [
+    256,
+    136
+  ],
+  "pivot": [
+    128,
+    104
+  ],
+  "anchor": "center",
+  "scale": 0.9,
+  "fps": 20,
+  "loop": false,
+  "frames_count": 30,
+  "palette_key": "heal",
+  "png_bytes": 274623,
+  "vram_kb": 4352
+}

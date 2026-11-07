@@ -1,0 +1,20 @@
+{
+  "id": "spawn/spawn-portal",
+  "out_name": "spawn_portal",
+  "frame_size": [
+    208,
+    150
+  ],
+  "pivot": [
+    104,
+    122
+  ],
+  "anchor": "bottom",
+  "scale": 0.7,
+  "fps": 20,
+  "loop": false,
+  "frames_count": 30,
+  "palette_key": "shadow",
+  "png_bytes": 273671,
+  "vram_kb": 3656
+}

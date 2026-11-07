@@ -23,6 +23,18 @@ const ITEMS: Array[Dictionary] = [
 	{"id": &"chest_open", "name": "宝匣破开(已下线)", "col": 1, "row": 2},
 	{"id": &"collect_burst", "name": "灵宝拾取", "col": 2, "row": 2},
 	{"id": &"loot_beam", "name": "法宝光柱", "col": 3, "row": 2},
+
+	# —— 2026-11-07 线条圈通刷新增 ——
+	# 祭坛曾用 rune_circle/blessing_cone，同日「去花」下线（常驻祭坛不挂循环特效）；
+	# rune_circle 仍被炮塔阵盘/玩家光环/敌环/刷怪预告使用，blessing_cone 已整包删除。
+	{"id": &"rune_circle", "name": "金符环", "col": 0, "row": 3},
+	{"id": &"spawn_portal", "name": "刷怪裂隙", "col": 2, "row": 3},
+	{"id": &"sonic_ring", "name": "音波环", "col": 3, "row": 3},
+	{"id": &"kill_blast", "name": "击杀灵爆", "col": 0, "row": 4},
+	{"id": &"toxic_puddle", "name": "毒潭液面", "col": 1, "row": 4},
+	{"id": &"ember_pool", "name": "火池液面", "col": 2, "row": 4},
+	{"id": &"blood_ward", "name": "血海护罩", "col": 3, "row": 4},
+	{"id": &"heal_aoe", "name": "治疗法阵", "col": 0, "row": 5},
 ]
 
 var _frame: int = 0
@@ -37,7 +49,7 @@ func _ready() -> void:
 
 	# 标题
 	var title := Label.new()
-	title.text = "【pixelfx P0 核心特效总览】天罚/近战/元素/爆散 12 项预览"
+	title.text = "【pixelfx 特效总览】天罚/近战/元素/爆散 + 线条圈通刷 21 项预览"
 	title.position = Vector2(30, 16)
 	title.modulate = Color(0.9, 0.85, 0.6)
 	add_child(title)
@@ -45,6 +57,17 @@ func _ready() -> void:
 	var col_width := 230.0
 	var row_height := 160.0
 	var start_pos := Vector2(120, 120)
+
+	# 2026-11-07 线条圈通刷后条目涨到 21 项（6 行），540 高视口装不下 ——
+	# 全部内容挂进一块自适应缩放的内容板：按最深的行算出 fit 系数整体缩小。
+	var max_row := 0
+	for item in ITEMS:
+		max_row = maxi(max_row, int(item["row"]))
+	var board := Node2D.new()
+	var content_h := start_pos.y + float(max_row + 1) * row_height + 60.0
+	board.scale = Vector2.ONE * minf(1.0, 528.0 / content_h)
+	board.position = Vector2(0.0, 0.0)
+	add_child(board)
 
 	for item in ITEMS:
 		var pos := start_pos + Vector2(item["col"] * col_width, item["row"] * row_height)
@@ -55,7 +78,7 @@ func _ready() -> void:
 		marker.position = pos + Vector2(-60, 48)
 		marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		marker.modulate = Color(0.65, 0.70, 0.80, 0.85)
-		add_child(marker)
+		board.add_child(marker)
 
 		# 创建并播放特效节点
 		var anim := AnimatedSprite2D.new()
@@ -70,7 +93,7 @@ func _ready() -> void:
 			if conf.get("hdr", true):
 				var mat := FxFlipbookPool._ensure_material()
 				anim.material = mat
-			add_child(anim)
+			board.add_child(anim)
 			anim.play(&"default")
 			_anim_sprites.append(anim)
 

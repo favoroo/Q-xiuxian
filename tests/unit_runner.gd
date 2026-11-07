@@ -120,7 +120,6 @@ func _ready() -> void:
 		[spiritbeast, "_test_obelisk_tier_growth"],
 		[spiritbeast, "_test_spirit_beast_stage_scaling"],
 		[spiritbeast, "_test_obelisk_blood_cost"],
-		[spiritbeast, "_test_obelisk_orbiters_cap"],
 		[spiritpet, "_test_fengdiao_vortex_formulas"],
 		[spiritpet, "_test_fengdiao_ring_geometry"],
 		[spiritpet, "_test_fengdiao_data_desc_consistency"],

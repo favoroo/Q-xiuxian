@@ -1,0 +1,20 @@
+{
+  "id": "arcane/rune-circle",
+  "out_name": "rune_circle",
+  "frame_size": [
+    136,
+    100
+  ],
+  "pivot": [
+    68,
+    80
+  ],
+  "anchor": "center",
+  "scale": 1.8,
+  "fps": 20,
+  "loop": true,
+  "frames_count": 24,
+  "palette_key": "gold",
+  "png_bytes": 282216,
+  "vram_kb": 1328
+}

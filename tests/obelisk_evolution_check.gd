@@ -85,8 +85,6 @@ func _case_initial_tier() -> void:
 ## ② 血祭：金币 0、生命足够，键面切血祭；爆发后扣 18% 生命、金币不变、启动次数 +1、灵兽出生阶对
 func _case_blood_ritual() -> void:
 	GameManager.obelisk_activations = 1          # 免费档已用过，回到按波收费口径
-	# 模拟首次免费召唤已经发生：基座应有 1 枚火苗；本 Case 再召一次后变 2 枚
-	_obelisk._orbiters.set_count(GameManager.obelisk_activations)
 	GameManager.spirit_stones = 0
 	_player.current_health = _player.max_health
 	var hp_before: float = _player.current_health
@@ -111,8 +109,6 @@ func _case_blood_ritual() -> void:
 	_c.check(_obelisk.spent_this_wave, "② 血祭爆发后祭坛进本回合灰相")
 	_c.equals(GameManager.spirit_stones, 0, "② 血祭不扣金币")
 	_c.equals(GameManager.obelisk_activations, 2, "② 血祭照常计入启动次数（1→2）")
-	_c.check(_obelisk._orbiters != null and _obelisk._orbiters.orbiter_count() == 2,
-		"② 累计召唤 2 次 ⇒ 基座 2 枚环绕火苗")
 	_c.near(_player.current_health, maxf(1.0, hp_before - float(blood_cost)), 0.6,
 		"② 血祭扣 18%% 最大生命（%d）" % blood_cost)
 	_c.check(_banner_seen.contains("血祭"), "② 血祭横幅（实得：%s）" % _banner_seen)
@@ -144,8 +140,6 @@ func _case_tier_up_on_activation() -> void:
 	_obelisk.start_charge()
 	await _settle(100)
 	_c.equals(GameManager.obelisk_activations, 3, "③ 启动次数到 3")
-	_c.check(_obelisk._orbiters != null and _obelisk._orbiters.orbiter_count() == 3,
-		"③ 累计召唤 3 次 ⇒ 基座 3 枚环绕火苗")
 	_c.equals(_obelisk._obelisk_tier, 2, "③ 启动次数跨 3 ⇒ 祭坛晋 2 阶")
 	_c.check(_obelisk._obelisk_renderer != null and _obelisk._obelisk_renderer.tier == 2,
 		"③ 水晶渲染器同步 tier=2")

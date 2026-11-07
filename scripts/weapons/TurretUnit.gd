@@ -24,6 +24,20 @@ const TRANSFER_FX := preload("res://scripts/weapons/TurretTransferFx.gd")
 ## 维修期间的灵气索 + 盘缘维护环（纯表现层）
 const REPAIR_FX := preload("res://scripts/weapons/TurretRepairFx.gd")
 
+## 常驻阵盘（pixelfx rune_circle 循环帧）：只承担阵盘的**装饰环** —— 外缘亮环 + 内暗环；
+## 耐久弧 / 磨损警示环 / 维修三段旋转弧 / 进度弧 / 短齿 / 维修范围虚线环仍是矢量读数
+## （画多大 == 判多大），一行不动。
+## 缩放换算（帧宽口径）：目标世界直径 / (帧宽 × 基础scale)。rune_circle 帧 136×100、base scale 1.8
+## ⇒ 世界宽 244.8px（scale_mult = 1.0 即祭坛档，符环半径 ≈83px）。机关口径是「替换装饰环」：
+## 符环要压在阵盘外缘上（本类 r_outer = 18px ⇒ 直径 36px）；符环图形约占帧宽 0.68（166px @1.0）
+## ⇒ 帧宽口径目标直径 ≈ 36 / 0.68 ≈ 53px ⇒ scale_mult ≈ 0.22（比祭坛档小一半还多）。
+## 注：机关本体量级只有 ~40px，0.5 档以上会越过 MIN_TURRET_SPACING=64 的相邻间距、把场子糊满大圈。
+const RUNE_PLATE_WORLD_DIAM := 53.0
+## 常驻阵盘染色档：在役全亮 / 维修中半亮 / 停摆压暗（纯表现层，不参与任何判定）
+const RUNE_PLATE_ALPHA_IDLE := 0.92
+const RUNE_PLATE_ALPHA_REPAIRING := 0.66
+const RUNE_PLATE_ALPHA_BROKEN := 0.34
+
 var _pool_key: String = ""
 var _fire_tween: Tween = null
 var _dismiss_tween: Tween = null
@@ -199,6 +213,10 @@ var muzzle_flash: Sprite2D = null
 var _proc_renderer: ProceduralTurretRenderer = null
 ## 机关元素（_ready 时从 WeaponData 推导）：底座阵缘配色/形态与枪口闪光都按它分化
 var _elem: String = "metal"
+## 常驻阵盘精灵（pixelfx rune_circle 循环）：挂在宿主子节点下，显隐/染色随宿主同拍
+## （器核投送半透明入场、dismiss 淡出、出树休眠都不显形）；
+## begin_life / _recycle 再显式复位一次，避免池化复用时残留上一台的染色或可见态。
+var _rune_plate: AnimatedSprite2D = null
 
 ## 头顶状态牌（需维修 / 停摆 / 维修中）：Node2D + Label + LabelSettings，
 ## 照 BlessingObelisk 的碑顶读数范式（描边保证暗底可读），只在需要时显形。
@@ -247,6 +265,7 @@ func _ready() -> void:
 	queue_redraw()
 	_setup_proc_renderer()
 	_setup_muzzle_flash()
+	_setup_rune_plate()
 
 ## 头顶状态牌：Node2D 挂在机关上，Label 居中在头顶；内容变了才重写。
 func _build_readout() -> void:
@@ -304,6 +323,8 @@ func begin_life(keep_durability: float = -1.0, from_pos: Vector2 = Vector2.INF) 
 		_elem = "metal"
 	_update_core_icon()
 	_setup_proc_renderer()
+	# 常驻阵盘随元素复位（同一池服务所有机关武器，阵缘配色要跟着 _elem 走）
+	_setup_rune_plate()
 	if _readout != null:
 		_readout.visible = false
 	_readout_key = ""
@@ -375,6 +396,64 @@ func _setup_muzzle_flash() -> void:
 	muzzle_flash.visible = false
 	muzzle_point.add_child(muzzle_flash)
 
+# ---------------- 常驻阵盘（pixelfx rune_circle） ----------------
+
+## 常驻阵盘：只搭一次（_ready 首搭 / 池化复用前确认一次），之后只更新染色与显隐。
+func _setup_rune_plate() -> void:
+	if _rune_plate == null:
+		_build_rune_plate()
+	if _rune_plate == null:
+		return
+	# 复用/入场复位：显隐回到「在役」档，loop 重新起播（休眠时 _recycle 已 visible=false + stop）
+	_rune_plate.visible = true
+	_rune_plate.play(&"default")
+	_refresh_rune_plate()
+
+## 常驻精灵范式：FxSheetData.get_sprite_frames + 自带 offset，
+## 不占 FxFlipbookPool 池位（每台机关一枚；池只有 16 位，还要留给武器演出与掉落光柱）。
+## 树位插到最前：叠在本体 _draw（贴地阴影/盘底/耐久弧/警示环…）之上、机体与状态牌之下 ——
+## 盘底实心暗盘会盖住画在它下面的东西，所以精灵必须在 _draw 之上（不能靠 z_index 压到底下）。
+func _build_rune_plate() -> void:
+	var frames := FxSheetData.get_sprite_frames(&"rune_circle")
+	if frames == null:
+		return
+	_rune_plate = AnimatedSprite2D.new()
+	_rune_plate.name = "RunePlate"
+	_rune_plate.sprite_frames = frames
+	_rune_plate.animation = &"default"
+	_rune_plate.centered = true
+	# offset 把 sheet 的地面圆心对准节点原点（pivot(68,80) → anchor center 的 offset(0,-30)）
+	_rune_plate.offset = FxSheetData.get_offset(&"rune_circle")
+	_rune_plate.scale = Vector2.ONE * _rune_plate_scale_mult()
+	_rune_plate.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	var mat := FxFlipbookPool.get_hdr_material()
+	if mat != null and not FxBudget.crowded:
+		_rune_plate.material = mat
+	add_child(_rune_plate)
+	move_child(_rune_plate, 0)
+
+## 帧宽口径缩放：目标世界直径 / (帧宽 × 基础scale)；配置缺失时退回 0（不显示）
+func _rune_plate_scale_mult() -> float:
+	var conf := FxSheetData.get_config(&"rune_circle")
+	if conf.is_empty():
+		return 0.0
+	var fs: Vector2 = conf.get("frame_size", Vector2(136.0, 100.0))
+	var base_scale: float = conf.get("scale", 1.8)
+	return RUNE_PLATE_WORLD_DIAM / maxf(1.0, fs.x * base_scale)
+
+## 染色复位：阵缘元素色（与本体 _elem 同源），停摆压暗、维修中半亮。
+## 符文游转由 sheet 自带帧动画承担，这里不做任何额外旋转逻辑。
+func _refresh_rune_plate() -> void:
+	if _rune_plate == null:
+		return
+	var col: Color = _elem_edge_color()
+	var a := RUNE_PLATE_ALPHA_IDLE
+	if is_broken():
+		a = RUNE_PLATE_ALPHA_BROKEN
+	elif _is_repairing:
+		a = RUNE_PLATE_ALPHA_REPAIRING
+	_rune_plate.modulate = Color(col.r, col.g, col.b, a)
+
 # ---------------- 耐久 / 维修 / 整备 ----------------
 
 ## 耐久比例 0..1（HUD / 世界弧共用）
@@ -412,6 +491,8 @@ func begin_repair() -> void:
 	_repair_phase = 0.0
 	_repair_spark_timer = 0.0
 	_spawn_repair_fx()
+	# 阵盘染色跟着状态档走（维修中半亮；收工/满档由 _refresh_readout 复位）
+	_refresh_rune_plate()
 
 ## 结束维修（松手/离开范围/波末）：保留已修部分
 func end_repair() -> void:
@@ -504,6 +585,8 @@ func _refresh_readout() -> void:
 	_readout.visible = not text.is_empty()
 	_readout_label.text = text
 	_readout_label.label_settings.font_color = col
+	# 状态档变了才重染：在役全亮 / 维修中半亮 / 停摆压暗（与头顶状态牌同拍）
+	_refresh_rune_plate()
 
 # ---------------- 绘制 ----------------
 
@@ -1052,6 +1135,10 @@ func _recycle() -> void:
 		_fire_tween.kill()
 	if _life_tween != null and _life_tween.is_valid():
 		_life_tween.kill()
+	# 出树休眠这一拍把阵盘精灵停掉并藏起：池体不许留着还在播的子精灵（复用由 begin_life 复位）
+	if _rune_plate != null:
+		_rune_plate.stop()
+		_rune_plate.visible = false
 	current_target = null
 	_targets.clear()
 	if _owner_weapon != null and is_instance_valid(_owner_weapon):

@@ -2,6 +2,14 @@ class_name BlessingObelisk
 extends Node2D
 
 ## 聚灵阵 — 玩家主动长按激活的阵法节点（2026-10-25 重设计：单祭坛 · 每回合金币启动）。
+## 【2026-11-07 视觉重设计 + 同日「去花」修订】用户口径两段：先嫌旧阵盘发绿（→全坛改固定
+##   鎏金/玉白语义色 AURUM 系，不读主题三件套，默认荧绿主题正是「绿圈」根源）；
+##   再看常驻特效太花——祭坛是一直都在的东西，循环特效堆满一屏根本不行（→全撤）：
+##   rune_circle 金符环 / sunburst 水晶日轮 / ObeliskOrbiters 环绕火苗 / blessing_cone 充能天光
+##   整套下线，渲染器同步静态化（追光/刻度/悬晶/星芒/呼吸全撤，见 ProceduralObeliskRenderer）。
+##   常驻观感只剩：暗玉底盘 + 静态界环（玩家在场提亮）+ 基座晶柱 + 灯光。
+##   充能反馈收敛到三处进度读数契约（走针环/灌灵/百分比）+ 充能粒子 + 灯光增亮；
+##   一次性事件演出（金铢注入/激活爆发/晋阶庆祝）不动。
 ## 玩家进入范围后 HUD 显示激活按钮，长按充能；充满即扣金币并演出「灵石注入」——
 ## 金铢从玩家身上飞入晶柱，注入完成才爆发：全屏灵气冲击 + 召唤灵兽助战。
 ## 启动后本回合进入「耗尽灰相」；下一回合开始（wave_changed）自动复燃、可再次启动。
@@ -44,8 +52,10 @@ const ARC_TRACK_WIDTH: float = 3.0
 const ARC_START_ANGLE: float = -PI / 2.0
 ## 弧上采样点数：一圈 72 段，斜切像素风下够圆
 const ARC_POINTS: int = 72
-## 走针环从主蓝转到点缀黄的起点：只有最后这一档算「快好了」，全程线性拉色会提前发土
+## 走针环从玉白冷调转到鎏金的起点：只有最后这一档算「快好了」，全程线性拉色会提前发土
 const ARC_WARM_FROM: float = 0.62
+## 走针环冷调起点色（玉白灵气）：充能即「灵气入阵」，充满烤成鎏金（2026-11-07 去绿重设计）
+const ARC_COLD := Color(0.62, 0.88, 1.0)
 ## 碑顶百分比的摆位：碑画到 y=-78，再往上留一档
 const READOUT_LABEL_POS := Vector2(0, -104)
 ## 读数淡入/淡出时长（秒）：只做「别闪」，不改进度真值
@@ -104,11 +114,6 @@ var _readout_ratio: float = 0.0
 ## 激活仪式的金柱句柄（loot_beam 是循环帧不自回收，句柄留底才能到点/出树时归还池）
 var _ritual_beam: AnimatedSprite2D = null
 
-## 召唤印记环绕火苗（2026-11-02）：累计成功召唤一次多一枚，纯表现层，不参与判定
-var _orbiters: ObeliskOrbiters = null
-## 水晶灵光日轮：垫在水晶背后的 pixelfx sunburst，阶数越高越大越亮
-var _crystal_aura: AnimatedSprite2D = null
-
 ## 碑脚走针环：轨道一整圈 + 进度弧 + 弧头。颜色由外部按进度从主蓝拉到点缀黄。
 ## 尺寸/颜色一律由外层 _build_charge_readout() 灌进来（不在内类里自取外层常量：
 ## 同一个脚本的内类反向引用外层 class_name 属于自引用解析，Godot 未必接）。
@@ -159,9 +164,6 @@ func _ready() -> void:
 	_obelisk_renderer.tier = _obelisk_tier
 	if light != null:
 		light.energy = _tier_light_energy()
-	# 水晶灵光日轮先建（move_child 到 0 压到水晶之下），环绕火苗后建（浮在水晶之上）
-	_build_crystal_aura()
-	_build_orbiters()
 
 	_setup_charge_particles()
 	_build_charge_readout()
@@ -208,7 +210,8 @@ func _setup_charge_particles() -> void:
 	_charge_particles.scale_amount_curve = sc
 	_charge_particles.damping_min = 6.0
 	_charge_particles.damping_max = 14.0
-	_charge_particles.color = Color(0.45, 0.85, 1.0, 0.75)
+	# 2026-11-07 去绿重设计：吸入灵尘随阵盘走鎏金语义色（充能=供金化灵）
+	_charge_particles.color = Color(1.0, 0.85, 0.45, 0.78)
 	add_child(_charge_particles)
 
 ## 世界侧进度读数：碑脚走针环 + 碑顶百分比。平时不显示，充能期间才亮。
@@ -258,39 +261,6 @@ func _apply_stone_fill_color(_preset: StringName = &"") -> void:
 		return
 	stone_mat.set_shader_parameter("fill_color", GameStyle.GOLD_EDGE)
 
-## 水晶灵光日轮（2026-11-02）：pixelfx sunburst 常驻 loop，垫在程序化水晶背后。
-## 不占 FxFlipbookPool 池位（同场只有这一座祭坛），尺寸/亮度随灵脉阶抬升。
-func _build_crystal_aura() -> void:
-	if _crystal_aura != null:
-		return
-	var frames := FxSheetData.get_sprite_frames(&"sunburst")
-	if frames == null:
-		return
-	_crystal_aura = AnimatedSprite2D.new()
-	_crystal_aura.sprite_frames = frames
-	_crystal_aura.animation = &"default"
-	_crystal_aura.centered = true
-	# z=0 且 move_child 到 0：在祭坛渲染器（含地面阵盘/基座/水晶）之前画，
-	# 既能压在水晶背后，又不会被更早绘制的地砖层吞掉。
-	_crystal_aura.z_as_relative = false
-	_crystal_aura.z_index = 0
-	var mat := FxFlipbookPool.get_hdr_material()
-	if mat != null and not FxBudget.crowded:
-		_crystal_aura.material = mat
-	add_child(_crystal_aura)
-	move_child(_crystal_aura, 0)
-	_crystal_aura.play(&"default")
-
-## 召唤印记环绕火苗（2026-11-02）：每成功启动祭坛一次多一枚，最多 8 枚。
-## 数量读已存档的 obelisk_activations —— 读档/中途进场也能直接还原到正确数量。
-func _build_orbiters() -> void:
-	if _orbiters != null:
-		return
-	_orbiters = ObeliskOrbiters.new()
-	add_child(_orbiters)
-	_orbiters.set_tier(_obelisk_tier)
-	_orbiters.set_count(GameManager.obelisk_activations)
-
 ## 回合开始：上回合灰相的祭坛在此复燃（启动价的显示在 HUD 激活键上，键自己读现价）
 func _on_wave_changed(_wave_number: int) -> void:
 	_refresh_tier_from_wave()
@@ -307,14 +277,13 @@ func _refresh_tier_from_wave() -> void:
 	_obelisk_tier = new_tier
 	if _obelisk_renderer != null:
 		_obelisk_renderer.tier = _obelisk_tier
-	if _orbiters != null:
-		_orbiters.set_tier(_obelisk_tier)
 	if light != null and not spent_this_wave:
 		light.energy = _tier_light_energy()
 	var host: Node = get_parent()
 	if host != null:
-		JuiceEffect.spawn_shockwave(host, global_position, 34.0 + 8.0 * float(_obelisk_tier), GameStyle.GOLD, 0.35)
-		FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, GameStyle.GOLD, 0.8, true)
+		# 晋阶庆祝走固定鎏金（AURUM）：祭坛的 celebratory 色跟供金语义，不跟玩家主题
+		JuiceEffect.spawn_shockwave(host, global_position, 34.0 + 8.0 * float(_obelisk_tier), GameStyle.AURUM, 0.35)
+		FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, GameStyle.AURUM, 0.8, true)
 
 ## 灯光静止能量随阶数抬高：水晶越强，碑脚那圈光越亮
 func _tier_light_energy() -> float:
@@ -343,8 +312,6 @@ func blood_cost() -> int:
 
 ## 灰相反向：灯光复燃、石碑回色、阵盘重亮，泽青灵环宣告「下回合又能用了」
 func _revive_from_spent() -> void:
-	if _orbiters != null:
-		_orbiters.set_spent(false)
 	var tw := create_tween()
 	if light != null:
 		light.enabled = true
@@ -393,10 +360,12 @@ func _set_readout_ratio(ratio: float) -> void:
 	_readout_ratio = clampf(ratio, 0.0, 1.0)
 	if _readout_arc != null:
 		_readout_arc.ratio = _readout_ratio
-		## 转黄只留给最后一档：线性拉色的话充到六成半就已经是土黄，看着像"卡住了"
+		## 转金只留给最后一档：线性拉色的话充到六成半就已经是土金，看着像"卡住了"
+		## 2026-11-07 去绿重设计：玉白冷起、烤成鎏金收尾（不再读主题色/点缀黄）
 		var warm: float = smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)
-		_readout_arc.progress_color = GameStyle.GOLD.lerp(GameStyle.JADE, warm)
-		_readout_arc.head_color = GameStyle.GOLD_EDGE.lerp(GameStyle.JADE_EDGE, warm)
+		_readout_arc.progress_color = ARC_COLD.lerp(GameStyle.AURUM, warm)
+		_readout_arc.head_color = Color(0.94, 0.98, 1.0).lerp(GameStyle.AURUM_EDGE, warm)
+		_readout_arc.track_color = Color(GameStyle.AURUM.darkened(0.55), 0.6)
 		_readout_arc.queue_redraw()
 	if _readout_label != null:
 		var pct: int = int(roundf(_readout_ratio * 100.0))
@@ -404,7 +373,7 @@ func _set_readout_ratio(ratio: float) -> void:
 			_readout_pct = pct
 			_readout_label.text = "%d%%" % pct
 			_readout_label.add_theme_color_override("font_color",
-				GameStyle.CHALK.lerp(GameStyle.JADE_EDGE, smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)))
+				GameStyle.CHALK.lerp(GameStyle.AURUM_EDGE, smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)))
 	if stone_mat != null:
 		stone_mat.set_shader_parameter("fill_ratio", _readout_ratio)
 	if _obelisk_renderer != null:
@@ -423,17 +392,6 @@ func _process(delta: float) -> void:
 		_obelisk_renderer.is_player_inside = is_player_inside
 		_obelisk_renderer.is_charging = is_charging
 		_obelisk_renderer.ring_rotation = circle_sprite.rotation
-		# 灵光日轮与环绕火苗跟随同一颗水晶的悬浮呼吸（耗尽形变时同步收光）
-		var core := _obelisk_renderer.crystal_core_position()
-		if _crystal_aura != null:
-			_crystal_aura.position = core
-			var aura_scale: float = 0.65 + 0.12 * float(_obelisk_tier - 1)
-			_crystal_aura.scale = Vector2(aura_scale, aura_scale)
-			var aura_alpha: float = (0.30 + 0.08 * float(_obelisk_tier - 1) + _readout_ratio * 0.35) \
-				* (1.0 - _obelisk_renderer.spent_blend)
-			_crystal_aura.modulate = Color(1.0, 1.0, 1.0, aura_alpha)
-		if _orbiters != null:
-			_orbiters.orbit_center = core + ObeliskOrbiters.ORBIT_CENTER_OFFSET
 	if spent_this_wave or is_infusing:
 		return
 	if is_charging:
@@ -518,10 +476,6 @@ func _begin_infusion() -> void:
 			_obelisk_renderer.tier = _obelisk_tier
 		if light != null:
 			light.energy = _tier_light_energy()
-	# 召唤印记 +1（累计启动次数），并同步阶数给火苗尺寸；越用越多，与水晶阶位分开读
-	if _orbiters != null:
-		_orbiters.set_tier(_obelisk_tier)
-		_orbiters.set_count(GameManager.obelisk_activations)
 	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
 	if _blood_mode:
 		# 血祭（2026-11-02）：扣当前生命（至少留 1 点），不扣金币、不记消费；
@@ -590,9 +544,6 @@ func _spawn_cost_float_text(cost: int, from_pos: Vector2, col: Color = Color(0, 
 func _release_blessing() -> void:
 	is_infusing = false
 	spent_this_wave = true
-	# 灰相同步：环绕火苗随祭坛一起降亮降速，下一回合复燃时再重亮
-	if _orbiters != null:
-		_orbiters.set_spent(true)
 	## 进度读数收工：兑现由冲击波接管，环再留着就是多余的读数
 	_hide_readout()
 	blessing_triggered.emit(self)
@@ -737,8 +688,6 @@ func _stop_ritual_beam() -> void:
 func _enter_spent_look() -> void:
 	light.enabled = false
 	circle_sprite.visible = false
-	if _orbiters != null:
-		_orbiters.set_spent(true)
 	if _obelisk_renderer != null:
 		_obelisk_renderer.is_spent = true
 

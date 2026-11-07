@@ -14,6 +14,11 @@ extends Area2D
 ##   - 持续时长真话在 EnemyBase（poison_duration 导出字段），池只认 duration 字段。
 ## 层级：地面贴花类 —— 宿主 Y 排序键钉在 GROUND_SORT_Y，在开 Y 排序的战层里
 ## 恒排在所有角色之前 ⇒ 永远渲染在角色脚下（与 GroundDecalHost 同一条修复）。
+##
+## 【2026-11-07 pixelfx 液面】潭体液面改由常驻子精灵承担（毒潭 toxic_puddle / 火池 ember_pool，
+## loop 贴地），原「实心圆堆液面 + 多阶羽化底晕 + 暗流亮芯 + 暗斑」四段矢量绘制下线（_draw 留
+## 回退注释）；矢量冒泡保留（液面活性）。贴图世界宽 = 液摊包围盒宽（画多大 == 判多大）。
+## 子圆聚合形状与逐块碰撞（_blobs / _shape_nodes）一行未动，仍是外观与判定的唯一真话。
 
 enum Kind { POISON, FIRE }
 
@@ -51,6 +56,11 @@ const GROW_TIME := 0.22             ## 落地摊开生长时长（秒）：毒�
 const REDRAW_INTERVAL := 0.05       ## 冒泡/渐隐重绘节流（20Hz，照 ArenaVisualLayer 口径）
 const DAMAGE_SCAN_INTERVAL := 0.0667 ## 伤害扫描节流（~15Hz，照 SunOrb 口径）：玩家受击无敌帧 ~0.5s，15Hz 必不漏跳
 const GROUND_SORT_Y := -100000.0    ## 宿主 Y 排序钉死键：恒排在角色之前（永远画在角色脚下）
+
+## pixelfx 液面贴图（2026-11-07 线条圈通刷接入）：替代原「实心圆堆液面 + 多阶羽化底晕」。
+## 毒/火两套同画幅同基础缩放（176×100 / 0.90），由 set_kind 换帧。
+const SURFACE_POISON := &"toxic_puddle"
+const SURFACE_FIRE := &"ember_pool"
 
 # —— 对象池（照 AstralGem / HealOrb / EnemyBolt 模式）——
 ## 投毒是周期技，一只怪 5 秒一发，同屏多只时 instantiate/free 的节点生命周期是实打实的分配热点。
@@ -93,6 +103,7 @@ func set_kind(k: int) -> void:
 	if pool_kind == k:
 		return
 	pool_kind = k
+	_apply_surface_frames()
 	queue_redraw()
 
 func _palette(k: int = -1) -> Dictionary:
@@ -108,6 +119,8 @@ var _dmg_scan_timer: float = 0.0    ## 伤害 overlap 扫描节流计时（15Hz 
 var _blobs: Array[Vector3] = []     ## 液面子圆聚合：x/y = 偏移，z = 半径（外观与碰撞逐块同源）
 var _bubbles: Array[Vector3] = []   ## 冒泡点：x/y = 偏移，z = 基准半径（相位由 _clock 驱动）
 var _specks: Array[Vector3] = []    ## 液内暗斑：x/y = 偏移，z = 半径（静态质感，纯视觉无判定）
+var _surface: AnimatedSprite2D = null  ## 液面贴图子精灵（loop 常驻，随宿主节点走；不占 FxFlipbookPool 池位）
+var _surface_scale_base: float = 1.0   ## 液面精灵基础缩放（不含生长/渐隐系数）：世界宽 = 液摊包围盒宽
 
 func _reset_defaults() -> void:
 	pool_kind = Kind.POISON
@@ -131,6 +144,7 @@ func _ready() -> void:
 		shape.disabled = true
 		add_child(shape)
 		_shape_nodes.append(shape)
+	_build_surface()
 
 ## 出膛激活：池化后 _ready 只在首建时跑过，半径/寿命/摊形必须按当前字段重铺
 func activate() -> void:
@@ -148,6 +162,11 @@ func activate() -> void:
 	_dmg_scan_timer = fposmod(float(get_instance_id() % 97) * 0.001, DAMAGE_SCAN_INTERVAL)
 	_generate_shape()
 	_sync_collision()
+	# 液面贴图与三件套同拍：换帧 → 显隐 → 缩放/透明度一次铺齐（池化复用不留上一滩的残影）
+	_apply_surface_frames()
+	if _surface != null:
+		_surface.visible = _surface.sprite_frames != null
+	_sync_surface()
 	queue_redraw()
 	# 碰撞恢复必须走 deferred：同帧「回收→复用」时回收的 disabled=true 会延迟到帧末 flush，
 	# 直接赋 false 会被它覆盖（照 EnemyBolt.activate 同一条坑）
@@ -165,6 +184,8 @@ func recycle() -> void:
 	for node in _shape_nodes:
 		node.set_deferred("disabled", true)
 	visible = false
+	if _surface != null:
+		_surface.visible = false
 	_reset_defaults()
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
 		queue_free()
@@ -210,6 +231,8 @@ func _generate_shape() -> void:
 	for _i in range(speck_count):
 		var off := Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU)) * rng.randf_range(0.0, radius * 0.26)
 		_specks.append(Vector3(off.x, off.y, rng.randf_range(1.2, 2.6)))
+	# 液面贴图缩放跟液摊走：贴图世界宽 = 液摊包围盒宽（画多大 == 判多大，不放大暗示范围）
+	_surface_scale_base = _surface_scale_from_blobs()
 
 ## 液面子圆逐块写入碰撞形状槽（外观与碰撞逐块同源），余槽禁用
 func _sync_collision() -> void:
@@ -223,42 +246,113 @@ func _sync_collision() -> void:
 		else:
 			node.set_deferred("disabled", true)
 
-func _draw() -> void:
-	BatchDraw.flush(self)
-	# 渐隐系数：末期 FADE_TIME 内线性降到 0，替代到点硬消失
+## pixelfx 液面精灵（2026-11-07 接入）：替代原矢量实心圆堆液面 + 多阶羽化底晕。
+## 为什么不走 FxFlipbookPool：毒潭是常驻 loop 件（同场最多 POOL_CAP 滩），进池会挤掉一次性
+## 特效名额；子精灵随宿主节点走（activate 亮 / recycle 灭），不占池。
+func _build_surface() -> void:
+	if _surface != null:
+		return
+	var anim := AnimatedSprite2D.new()
+	anim.name = "SurfaceFx"
+	anim.centered = true
+	# 贴地层：宿主 y 已钉 GROUND_SORT_Y（在开 y_sort 的战层里恒排最前），精灵必须留在宿主的
+	# y-sort 分组内 —— 若照 FxFlipbookPool.Z_GROUND(=2) 给绝对 z 会跳出分组盖到角色身上；
+	# 照 SpawnIndicator._build_portal_native 的配方：z=0（不用负 z，EntitiesLayer 全员 z=0，
+	# 负 z 会整只沉到 MapLayer 地砖之下不可见）+ show_behind_parent（液面画在 _draw 的冒泡之下）。
+	anim.z_as_relative = false
+	anim.z_index = 0
+	anim.show_behind_parent = true
+	anim.visible = false   ## 未 activate 前先收起（显隐与三件套同拍：activate 亮 / recycle 灭）
+	anim.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	add_child(anim)
+	_surface = anim
+	_apply_surface_frames()
+
+## 按当前 kind 装帧（毒/火两套液面）；贴图缺失时精灵保持不可见，冒泡照旧兜底
+func _apply_surface_frames() -> void:
+	if _surface == null:
+		return
+	var id: StringName = SURFACE_FIRE if pool_kind == Kind.FIRE else SURFACE_POISON
+	var frames := FxSheetData.get_sprite_frames(id)
+	_surface.sprite_frames = frames
+	if frames == null:
+		_surface.visible = false
+		return
+	_surface.animation = &"default"
+	_surface.offset = FxSheetData.get_offset(id)   ## center 锚点：offset 已把潭心对准节点原点
+	_surface.play(&"default")
+
+## 液面精灵基础缩放：贴图世界宽 = 液摊包围盒宽 D ⇒ scale = D / 画幅宽（不含生长/渐隐系数）
+## 画幅世界宽 = frame_size.x × 基础 scale，故先算 mult = D /(frame_size.x × 基础 scale) 再乘回基础 scale。
+func _surface_scale_from_blobs() -> float:
+	if _blobs.is_empty():
+		return 0.0
+	var min_x := INF
+	var max_x := -INF
+	for b in _blobs:
+		min_x = minf(min_x, b.x - b.z)
+		max_x = maxf(max_x, b.x + b.z)
+	var d: float = maxf(max_x - min_x, 1.0)
+	var id: StringName = SURFACE_FIRE if pool_kind == Kind.FIRE else SURFACE_POISON
+	var conf: Dictionary = FxSheetData.get_config(id)
+	var fw: float = 176.0
+	var base: float = 1.0
+	if not conf.is_empty():
+		var fs: Vector2 = conf.get("frame_size", Vector2(176.0, 100.0))
+		fw = maxf(fs.x, 1.0)
+		base = float(conf.get("scale", 1.0))
+	return base * (d / (fw * base))
+
+## 液面视觉因子：x = 末期渐隐系数(0~1)，y = 落地摊开系数(0.4→1)。
+## 贴图液面与矢量冒泡共用同一口径（改一处两边同时跟手）。
+func _surface_factors() -> Vector2:
 	var fade := clampf(duration / FADE_TIME, 0.0, 1.0)
-	# 落地摊开系数：0.4 → 1 ease-out（视觉「摊开」；期间碰撞已生效 —— 摊形只会画得
-	# 比实际范围略小半拍，绝不画得比判定大）
 	var grow_t := clampf(_age / GROW_TIME, 0.0, 1.0)
 	var g := (0.4 + 0.6 * (1.0 - pow(1.0 - grow_t, 3.0))) * lerpf(0.75, 1.0, fade)
+	return Vector2(fade, g)
 
-	# 俯视透视压扁：与地面角度对齐，消除立面漂浮感
+## 液面精灵跟生长/末期渐隐：缩放乘摊开系数 g（绕潭心收放，同矢量子圆的收缩口径），
+## 透明度吃渐隐 fade（替代原来的到点硬消失）。
+func _sync_surface() -> void:
+	if _surface == null or _surface.sprite_frames == null:
+		return
+	var f := _surface_factors()
+	_surface.scale = Vector2.ONE * (_surface_scale_base * f.y)
+	_surface.modulate = Color(1.0, 1.0, 1.0, f.x)
+
+func _draw() -> void:
+	BatchDraw.flush(self)
+	# 液面本体由常驻子精灵 _surface 承担（见 _build_surface）；这里只留矢量冒泡（液面活性）。
+	var f := _surface_factors()
+	var fade: float = f.x
+	var g: float = f.y
+
+	# 俯视透视压扁：与地面角度对齐，消除立面漂浮感（冒泡仍在节点空间里压扁绘制）
 	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 
 	var pal := _palette()
-	var c_dark: Color = pal["dark"]
-	var c_body: Color = pal["body"]
-	var c_sheen: Color = pal["sheen"]
 	var c_edge: Color = pal["edge"]
 
-	# 多阶羽化湿迹浸润底晕：从外到内梯级衰减，使液面轮廓柔和融进地砖纹理，消除硬边贴纸感
-	for b in _blobs:
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.22 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.16 * fade))
-	for b in _blobs:
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.12 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.30 * fade))
-	for b in _blobs:
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.04 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.45 * fade))
-	# 液面本体
-	for b in _blobs:
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * g, Color(c_body.r, c_body.g, c_body.b, c_body.a * fade))
-	# 液面暗流亮芯：向中心收缩的微光，读「液体还在流动」
-	for b in _blobs:
-		if b.z >= radius * 0.30:
-			BatchDraw.native_circle(self, Vector2(b.x, b.y) * 0.45 * g, b.z * 0.52 * g, Color(c_sheen.r, c_sheen.g, c_sheen.b, c_sheen.a * fade))
-	# 暗斑质感
-	for s in _specks:
-		BatchDraw.native_circle(self, Vector2(s.x, s.y) * g, s.z * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.45 * fade))
+	# pixelfx 接入点（回退：取消下面整段注释，用矢量液面顶替贴图液面）
+	# 原「多阶羽化底晕 → 液面本体 → 液面暗流亮芯 → 暗斑」四段（已由 _surface 贴图承担）：
+	# var c_dark: Color = pal["dark"]
+	# var c_body: Color = pal["body"]
+	# var c_sheen: Color = pal["sheen"]
+	# for b in _blobs:
+	# 	BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.22 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.16 * fade))
+	# for b in _blobs:
+	# 	BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.12 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.30 * fade))
+	# for b in _blobs:
+	# 	BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.04 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.45 * fade))
+	# for b in _blobs:
+	# 	BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * g, Color(c_body.r, c_body.g, c_body.b, c_body.a * fade))
+	# for b in _blobs:
+	# 	if b.z >= radius * 0.30:
+	# 		BatchDraw.native_circle(self, Vector2(b.x, b.y) * 0.45 * g, b.z * 0.52 * g, Color(c_sheen.r, c_sheen.g, c_sheen.b, c_sheen.a * fade))
+	# for s in _specks:
+	# 	BatchDraw.native_circle(self, Vector2(s.x, s.y) * g, s.z * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.45 * fade))
+
 	# 冒泡：逐泡独立相位「胀大→破掉」，破时挑一帧细亮环，读「这滩液面还活着」
 	var clk: float = _clock * (1.6 if pool_kind == Kind.FIRE else 1.0)
 	for i in range(_bubbles.size()):
@@ -307,6 +401,7 @@ func _physics_process(delta: float) -> void:
 	# 视觉时钟：摊开生长段逐帧重绘（摊开要顺滑），之后只有冒泡相位与末段透明度在动，20Hz 节流
 	_clock += delta
 	_age += delta
+	_sync_surface()   # 贴图液面与矢量冒泡同口径：生长段逐帧、之后 60Hz 只是几次赋值，忽略不计
 	_redraw_timer -= delta
 	if _age < GROW_TIME:
 		queue_redraw()

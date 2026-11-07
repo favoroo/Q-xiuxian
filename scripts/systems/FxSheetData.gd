@@ -165,6 +165,20 @@ const CONFIGS: Dictionary = {
 		"z_ground": false,
 		"element": "gold"
 	},
+	&"rune_circle": {
+		"tres": "res://assets/art/fx_pixelfx/rune_circle.tres",
+		# 2026-11-07 金符环（金色调，符文游转 + 追光扫环 + 浮尘上升，loop 常驻）。
+		# 136×100 源画幅 ×1.8 ⇒ 符环半径 ≈83px。使用方：炮塔阵盘 / 敌环 / 刷怪预告
+		# （祭坛、玩家光环曾用，2026-11-07「去花」下线——常驻件不挂循环特效，素材库保留他处照用）。
+		"scale": 1.8,
+		"anchor": "center",
+		"pivot": Vector2(68, 80),
+		"frame_size": Vector2(136, 100),
+		"loop": true,
+		"hdr": true,
+		"z_ground": true,
+		"element": "gold"
+	},
 		&"zap_hit": {
 			"tres": "res://assets/art/fx_pixelfx/zap_hit.tres",
 			"scale": 0.55,
@@ -283,6 +297,96 @@ const CONFIGS: Dictionary = {
 			"hdr": true,
 			"z_ground": false,
 			"element": "shadow"
+		},
+		## 2026-11-07 线条圈通刷：刷怪预警妖气裂隙（地面撕开再拧灭，shadow 紫黑）。
+		## 挂地面档，垫在预警红环之下；精英/Boss 必播，普通怪随帧闸自然丢弃（红环仍是主体）。
+		&"spawn_portal": {
+			"tres": "res://assets/art/fx_pixelfx/spawn_portal.tres",
+			"scale": 0.70,
+			"anchor": "bottom",
+			"pivot": Vector2(104, 122),
+			"frame_size": Vector2(208, 150),
+			"loop": false,
+			"hdr": true,
+			"z_ground": true,
+			"element": "shadow"
+		},
+		## 2026-11-07 线条圈通刷：音波环（音笛落点）——thunderclap 环段改烟紫冷调。
+		## 替换 BurstKindFx._draw_sonic 三重矢量音波环；半径经 scale_mult 对齐判定。
+		&"sonic_ring": {
+			"tres": "res://assets/art/fx_pixelfx/sonic_ring.tres",
+			"scale": 0.65,
+			"anchor": "bottom",
+			"pivot": Vector2(144, 124),
+			"frame_size": Vector2(288, 156),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "shadow"
+		},
+		## 2026-11-07 线条圈通刷：击杀爆炸（裂魂铃系）——等离子灵爆（ember 绯金）。
+		## 替换 ExplosionFx 矢量主冲击环；碎块/烟粒子保留。
+		&"kill_blast": {
+			"tres": "res://assets/art/fx_pixelfx/kill_blast.tres",
+			"scale": 0.60,
+			"anchor": "center",
+			"pivot": Vector2(112, 100),
+			"frame_size": Vector2(224, 200),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "fire"
+		},
+		## 2026-11-07 线条圈通刷：毒潭液面（沥青潭体+黄绿光脉+气泡，loop 常驻）。
+		## 挂地面档，缩放经 scale_mult 与毒潭判定半径同步；不挂 HDR（常驻地面件省起辉）。
+		&"toxic_puddle": {
+			"tres": "res://assets/art/fx_pixelfx/toxic_puddle.tres",
+			"scale": 0.90,
+			"anchor": "center",
+			"pivot": Vector2(88, 86),
+			"frame_size": Vector2(176, 100),
+			"loop": true,
+			"hdr": false,
+			"z_ground": true,
+			"element": "water"
+		},
+		## 2026-11-07 线条圈通刷：火池液面——toxic-puddle 同源火调色板，与毒潭同缩放口径。
+		&"ember_pool": {
+			"tres": "res://assets/art/fx_pixelfx/ember_pool.tres",
+			"scale": 0.90,
+			"anchor": "center",
+			"pivot": Vector2(88, 86),
+			"frame_size": Vector2(176, 100),
+			"loop": true,
+			"hdr": false,
+			"z_ground": true,
+			"element": "fire"
+		},
+		## 2026-11-07 线条圈通刷：血海护盾罩——金球罩面改 ember 血调，球面经线+扫光 loop。
+		## pivot(44,68)=罩体中心在画幅中偏上（原以假人身位为基准），挂玩家身位后罩心自然高于脚底。
+		&"blood_ward": {
+			"tres": "res://assets/art/fx_pixelfx/blood_ward.tres",
+			"scale": 1.0,
+			"anchor": "center",
+			"pivot": Vector2(44, 68),
+			"frame_size": Vector2(88, 84),
+			"loop": true,
+			"hdr": true,
+			"z_ground": false,
+			"element": "fire"
+		},
+		## 2026-11-07 线条圈通刷：治疗法阵——灵种落地青环滚开+十字光浮起（one-shot）。
+		## 回春术青莲阵矢量环替换与灵医脉冲共用；挂地面档。
+		&"heal_aoe": {
+			"tres": "res://assets/art/fx_pixelfx/heal_aoe.tres",
+			"scale": 0.90,
+			"anchor": "center",
+			"pivot": Vector2(128, 104),
+			"frame_size": Vector2(256, 136),
+			"loop": false,
+			"hdr": true,
+			"z_ground": true,
+			"element": "heal"
 		}
 	}
 

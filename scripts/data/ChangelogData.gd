@@ -8,6 +8,16 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.26",
+			"date": "2026-11-07",
+			"title": "特效精简焕新",
+			"items": [
+				"祭坛特效大幅精简，画面更清爽。",
+				"角色光环不再常转，突破时才有波纹。",
+				"十余处法阵特效换成像素画风，更精致。",
+			],
+		},
+		{
 			"version": "v0.1.25",
 			"date": "2026-11-07",
 			"title": "弹丸身份化",

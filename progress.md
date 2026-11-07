@@ -241,5 +241,20 @@
 | PX-LANE-I | 车道 I：界碑场景仪式（祭坛激活与通天金柱） | ✅ | Agent-I | `scripts/entities/BlessingObelisk.gd` | P0 | ObeliskReadoutCheck + ObeliskWaveCycleCheck | 2026-11-01 ｜ 碑顶通天神光+底座破散放光 ｜ #08 |
 | PX-LANE-J | 车道 J：随行技能强化（回春甘露与灵光凝聚） | ✅ | Agent-J | `scripts/entities/PlayerSkillVfx.gd` | P0 | SkillCheck + DashTravelProbe | 2026-11-01 ｜ 回春术青莲升华灵光爆发+残影轻量风息 ｜ #08 |
 
+### 第三批：线条圈通刷（2026-11-07 起，主会话统一调度）——全批 ✅ 收官
+
+> 收官记录：ScriptParse + core 6/6 + 13 项专项（BossTelegraph 60 / SuperVfx 48 / Inspect 28 / Turret 244 / PoisonPool 41 / Skill 117 / Revive 19 / EntitySize / DashTravel / SpiritBeast 28 / AtlasSkip 54 / KillKnockback 13 / GlowChannel 26）全绿；PixelfxPreview 21 项出图目检无空壳无假人；PerfProbe 受编辑器负载噪声 frame 项关游戏实例后全过、MEMORY_STATIC 2.0MB 宽档两版本互有越界（测量窗内本批零新增分配），发版前安静窗口复跑；全库 32 效果 raw 96.1MB 超 60MB 口径系历史遗留（是否减脂待用户拍板）。
+
+> 用户拍板：全面通刷剩余矢量线条圈；境界光环一并升级；AoeTelegraph 预警圈 / JuiceEffect 通用冲击环 / 链电传导弧仍保留。祭坛批 0（rune_circle/blessing_cone 接线）由前会话完成、本会话接手验证（ObeliskReadout 31 项 + WaveCycle 37 项 + core 6/6 全绿）。
+
+| ID | 任务 | 状态 | 认领 | 占用文件 | 依赖 | 验收 | 完成记录 |
+|---|---|---|---|---|---|---|---|
+| PX-S0 | 基建：7 张新导出（spawn_portal/sonic_ring/kill_blast/toxic_puddle/ember_pool/blood_ward/heal_aoe）+ CONFIGS + 目检台清单 | ✅ | 主会话 | `tools/pixelfx_manifest.json`、`scripts/systems/FxSheetData.gd`、`tests/pixelfx_preview.gd`、`assets/art/fx_pixelfx/**` | 无 | 导出 7 项 + 编辑器扫描 + core | 2026-11-07 ｜ 7 张 20.1MB 导出过 + 扫描净 + 目检台 21 项自适应缩放出图全亮 ｜ CHANGELOG #06 |
+| PX-SA | 车道 A：刷怪妖气裂隙 + 瞬移落点符环 | ✅ | Sweep-A | `scripts/entities/SpawnIndicator.gd`、`scripts/entities/BlinkRift.gd` | PX-S0 | BossTelegraphCheck + BlinkRiftPreview 目检 | 2026-11-07 ｜ BossTelegraphCheck 60 项 PASS；精英/Boss 常驻裂隙绕闸必播、普通怪池化随闸；Boss 跳 DEST 防双层 ｜ #06 |
+| PX-SB | 车道 B：落点四形态（音波/鼓震/坠印/火雨）+ 击杀爆炸 | ✅ | Sweep-B | `scripts/weapons/BurstKindFx.gd`、`scripts/weapons/ExplosionFx.gd` | PX-S0 | SuperVfxCheck + InspectCheck | 2026-11-07 ｜ SuperVfx 48 + Inspect 28 PASS；fire_rain 只给首枚 sheet 防连环撞闸；ExplosionFx 矢量主环压 0.4 保判定边缘读数 ｜ #06 |
+| PX-SC | 车道 C：机关布设法阵 + 常驻阵盘 | ✅ | Sweep-C | `scripts/weapons/TurretPlacementFx.gd`、`scripts/weapons/TurretUnit.gd` | PX-S0 | TurretCheck | 2026-11-07 ｜ TurretCheck 244 项 PASS；布设正播/收回反播 + 矢量兜底（回炉恢复）；符盘 0.22 档压底座外缘、读数环全保留 ｜ #06 |
+| PX-SD | 车道 D：毒潭火池液面 + 境界光环 + 血海护罩 | ✅ | Sweep-D | `scripts/entities/PoisonPool.gd`、`scripts/entities/player_aura.gd`、`scripts/entities/player_blood_shield.gd` | PX-S0 | PoisonPoolCheck + EntitySizeProbe | 2026-11-07 ｜ PoisonPool 41 PASS + EntitySize MEASURED；y-sort 组内用 show_behind_parent 配方弃绝对 z；blood_ward 罩面目检非空壳 ｜ #06 |
+| PX-SE | 车道 E：治疗法阵 + 灵医/鼓妖/还魂小件 | ✅ | Sweep-E | `scripts/entities/PlayerSkillVfx.gd`、`scripts/entities/SpiritHealer.gd`、`scripts/entities/procedural_enemy/ProceduralEnemyView.gd`、`scripts/entities/player_revive_ritual.gd` | PX-S0 | SkillCheck + ReviveCheck | 2026-11-07 ｜ SkillCheck 117 + ReviveCheck 19 PASS；回春/灵医矢量兜底（回炉恢复）+ 落点投影脚下；鼓妖光环 EXIT_TREE 同拍归零防复用短路 ｜ #06 |
+
 
 

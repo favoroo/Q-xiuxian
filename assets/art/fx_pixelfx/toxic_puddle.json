@@ -1,0 +1,20 @@
+{
+  "id": "nature/toxic-puddle",
+  "out_name": "toxic_puddle",
+  "frame_size": [
+    176,
+    100
+  ],
+  "pivot": [
+    88,
+    86
+  ],
+  "anchor": "center",
+  "scale": 0.9,
+  "fps": 20,
+  "loop": true,
+  "frames_count": 24,
+  "palette_key": "poison",
+  "png_bytes": 141162,
+  "vram_kb": 1650
+}

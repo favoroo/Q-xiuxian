@@ -9,6 +9,8 @@ extends Node2D
 ##   ③ 护体余韵：复活无敌期内脚下保持一圈呼吸金环，把「无敌中」读出来，无敌结束自动收。
 ## 约束：纯视觉零判定；相位由 instance_id 错相，不碰玩法随机源；演出中重复触发立即重置时间轴，
 ## 零节点泄漏（本节点常驻 Player 下，只切 visible 与绘制相位）。
+## pixelfx 接入（2026-11-07 车道 E）：凝魂/成形当拍再叠一张离线烘焙 summon_circle 序列帧（once，金染贴地），
+## 只加仪式感瞬间；双环/阵眼/内收灵环/呼吸金环仍走矢量骨架（低频仪式件的读数不丢）。
 
 const GATHER_DUR := 0.50        ## 凝魂段时长
 const PILLAR_UP_DUR := 0.10     ## 光柱拔起时长
@@ -27,6 +29,13 @@ const SOUL_DOTS := 4            ## 每条臂魂火数（共 12 粒）
 const GUARD_MIN_TIME := 0.6     ## 无敌剩余时间高于此值才画护体金环（避开普通受击无敌帧）
 const HZ := 40.0                ## 演出期间重绘节流
 
+## pixelfx 接入（2026-11-07 车道 E）：summon_circle 一次性序列帧，只加仪式感瞬间。
+## 换算：summon_circle 帧内阵环最大直径 ≈180 源px（200×220 帧内实测）× 基础 scale 0.65 ≈ 117 世界px；
+## 还魂阵外环直径 = ARRAY_R_OUT×2 = 92，故 scale_mult ≈ 92 / 117 ≈ 0.79。
+const SUMMON_FX_ID := &"summon_circle"
+const SUMMON_FX_SRC_RING_DIAM := 180.0
+const SUMMON_FX_TINT := Color(1.0, 0.85, 0.45, 0.9)  ## 金染（FX_HDR_GOLD 系，压 alpha 不盖骨架）
+
 var _t: float = -1.0            ## 演出时间轴（<0 = 空闲）
 var _burst_triggered: bool = false
 var _phase_seed: float = 0.0
@@ -42,6 +51,16 @@ func play() -> void:
 	_t = 0.0
 	_burst_triggered = false
 	visible = true
+	# 凝魂/成形当拍：脚底叠一张 summon_circle 序列帧（金染、贴地）。阵环直径对齐还魂阵外环
+	# （ARRAY_R_OUT×2），仪式感瞬间交给 sheet，骨架仍由下面的矢量阵承担。
+	# 帧闸挡下时 play 返回 null，静默放弃（矢量阵骨架照常，不重试）。
+	var summon_base: float = float(FxSheetData.get_config(SUMMON_FX_ID).get("scale", 0.65))
+	# pixelfx 接入点（回退：注释下一行）
+	FxFlipbookPool.play(SUMMON_FX_ID, global_position, {
+		"modulate": SUMMON_FX_TINT,
+		"scale_mult": (ARRAY_R_OUT * 2.0) / (SUMMON_FX_SRC_RING_DIAM * summon_base),
+		"z_ground": true,
+	})
 	queue_redraw()
 
 func _process(delta: float) -> void:

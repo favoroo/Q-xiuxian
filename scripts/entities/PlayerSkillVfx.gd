@@ -55,6 +55,15 @@ const RENEWAL_SUBLIME_AT := 0.72
 const GUARD_BURST_FX_DUR := 0.40    ## 盾势蓄满爆发罡气扩散时长（旧 0.24s）
 const FRENZY_BURST_FX_DUR := 0.45   ## 战意满层爆气光环时长（旧 0.28s）
 
+## 回春术青莲阵 pixelfx 替换（2026-11-07 车道 E）：地面矢量同心环+8 莲瓣角标退成兜底，主形态改由
+## 离线烘焙的 heal_aoe 序列帧承担（one-shot 30f@20fps≈1.5s，施法当拍播一次；被帧闸丢弃时矢量阵全量兜底）。
+## 换算口径：回春术是自身治疗、无 AoE 判定，故「阵直径」取旧矢量阵的最大铺展直径 ——
+## 脚下青莲法阵脉冲地环 22→76（半径），即直径 152。heal_aoe 帧内阵环最大直径 ≈230 源px
+## （256px 帧内实测），除以基础 scale 0.9 得 → scale_mult ≈ 152 / (230×0.9) ≈ 0.73。
+const RENEWAL_HEAL_AOE_ID := &"heal_aoe"
+const RENEWAL_HEAL_AOE_SRC_DIAM := 230.0  ## heal_aoe 帧内阵环最大直径（源px，实测）
+const RENEWAL_HEAL_AOE_TARGET_DIAM := 152.0  ## 目标阵世界直径（旧脉冲地环最大直径）
+
 # ---------------- 运行时状态 ----------------
 @onready var player: CharacterBody2D = get_parent() as CharacterBody2D
 
@@ -93,6 +102,9 @@ var _dash_ghost_count: int = 0  ## 冲刺位移路径残影计数（位移全程
 var renewal_progress: float = -1.0  ## >=0 播放回春法阵与生机光柱 (0.0 -> 1.0)
 var renewal_particles: Array[Dictionary] = []
 var _renewal_sublime_fired: bool = false  ## 本次施放是否已放过青莲升华那一发（每个施放周期只放一次）
+## 本次施放的地面阵是否已由 heal_aoe 序列帧起播接管（true→矢量青莲阵不画；false→矢量阵全量兜底）。
+## 帧闸（≤3/物理帧）/池满挡下时 play 返回 null，置 false，回春术仍有地面阵画面。
+var _renewal_sheet_played: bool = false
 
 # 6. 图集残影对象池 (Sprite2D，仅供图集模式兼容)
 var _ghost_pool: Array[Sprite2D] = []
@@ -280,6 +292,8 @@ func on_renewal_cast() -> void:
 	renewal_progress = 0.0
 	renewal_particles.clear()
 	_renewal_sublime_fired = false
+	# 技能状态重置处先把兜底态置回（上一次施放的 sheet 结论不许跨施放沿用）
+	_renewal_sheet_played = false
 	_notify_procedural_view("renewal", true, 1.0)
 	# 释放瞬间触发对应色粒子（回春甘露：生机碧翠 / FX_HDR_HEAL）
 	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
@@ -287,6 +301,17 @@ func on_renewal_cast() -> void:
 	# 上冲生机光柱 + 「灵气入体」上飘灵光：让按下那一瞬在世界层也有可见反馈
 	var feet_pos: Vector2 = player.global_position + (FEET_CENTER * _body_scale.y if player != null else Vector2.ZERO)
 	FxParticlePool.burst(FxParticlePool.LEVEL_PILLAR, feet_pos, "heal", 0.9, true)
+	# 地面九品青莲甘露阵改由 heal_aoe 序列帧承担：施法当拍在脚底播一次 one-shot（阵图自带透视压扁，
+	# 不必再 draw_set_transform squash）。位置取 feet_pos，与旧矢量阵的 FEET_CENTER 同源。
+	# heal 青绿调由素材调色板（element=heal）自带，与回春术同源，不再另传 modulate 二次染色。
+	# scale_mult 按阵直径换算：heal_aoe 帧内阵环 ≈230 源px、目标直径 152 ⇒ ÷基础 scale 0.9 ≈0.73。
+	# 帧闸（≤3/物理帧）挡下时 play 返回 null，静默放弃（阵是装饰，回血结算在上面已落账）。
+	var heal_aoe_base: float = float(FxSheetData.get_config(RENEWAL_HEAL_AOE_ID).get("scale", 0.9))
+	# pixelfx 接入点（回退：注释下一行）
+	_renewal_sheet_played = FxFlipbookPool.play(RENEWAL_HEAL_AOE_ID, feet_pos, {
+		"scale_mult": RENEWAL_HEAL_AOE_TARGET_DIAM / (RENEWAL_HEAL_AOE_SRC_DIAM * heal_aoe_base),
+		"z_ground": true,
+	}) != null
 	if player != null and player.get_parent() != null:
 		JuiceEffect.spawn_heal_rise(player.get_parent(), center_pos)
 	# 24 粒生机灵光从四周外圈向角色身躯螺旋汇聚
@@ -587,6 +612,7 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 		if renewal_progress >= 1.0:
 			renewal_progress = -1.0
 			renewal_particles.clear()
+			_renewal_sheet_played = false
 			_notify_procedural_view("renewal", false)
 
 		# 8. 踏影影层：只在「刚攒上一层」的弹跳期重画，稳态靠 on_shadow_gained 那一次 queue_redraw
@@ -1328,34 +1354,38 @@ func _back_out(t: float) -> float:
 	var x := t - 1.0
 	return 1.0 + c3 * x * x * x + c1 * x * x
 
-## 绘制【回春术】：灵光四周螺旋汇聚（空洞骑士 Focus 汇聚感） + 九品生机甘露阵
+## 绘制【回春术】：灵光四周螺旋汇聚（空洞骑士 Focus 汇聚感）
+## 地面青莲阵：heal_aoe 序列帧起播成功时 sheet 是主形态、矢量阵不画；被帧闸（≤3/物理帧）/池满
+## 丢弃时兜底回到原九品青莲阵矢量画法（老画法一行未删，照 BurstKindFx 的 _sheet_played 兜底模式）。
 func _draw_renewal_fx() -> void:
 	var p := renewal_progress
-	var alpha := 1.0 - p
-	var r := 16.0 + p * 36.0
 
-	# 1. 地面九品青莲甘露阵（层叠展开的生机青玉莲瓣与甘露环，俯视透视贴地）
-	BatchDraw.flush(self)
-	draw_set_transform(FEET_CENTER, 0.0, Vector2(1.0, 0.50))
-	var ring_col := Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, alpha * 0.95)
-	BatchDraw.native_arc(self, Vector2.ZERO, r, 0.0, TAU, 32, ring_col, maxf(1.0, 3.2 * (1.0 - p)), true)
-	BatchDraw.native_arc(self, Vector2.ZERO, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, alpha * 0.85), 1.5, true)
+	# 1. 地面九品青莲甘露阵（heal_aoe 未起播时的全量兜底）
+	if not _renewal_sheet_played:
+		var alpha := 1.0 - p
+		var r := 16.0 + p * 36.0
+		# 层叠展开的生机青玉莲瓣与甘露环，俯视透视贴地
+		BatchDraw.flush(self)
+		draw_set_transform(FEET_CENTER, 0.0, Vector2(1.0, 0.50))
+		var ring_col := Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, alpha * 0.95)
+		BatchDraw.native_arc(self, Vector2.ZERO, r, 0.0, TAU, 32, ring_col, maxf(1.0, 3.2 * (1.0 - p)), true)
+		BatchDraw.native_arc(self, Vector2.ZERO, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, alpha * 0.85), 1.5, true)
 
-	# 1b. 脚下青莲法阵脉冲地环：比莲瓣阵慢半拍的大环，贴地铺展
-	var pulse_p := clampf(p * 1.2, 0.0, 1.0)
-	var ground_r := 22.0 + pulse_p * 54.0
-	var ground_a := (1.0 - pulse_p) * 0.55
-	if ground_a > 0.02:
-		BatchDraw.native_arc(self, Vector2.ZERO, ground_r, 0.0, TAU, 32,
-			Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, ground_a), 1.8, true)
+		# 1b. 脚下青莲法阵脉冲地环：比莲瓣阵慢半拍的大环，贴地铺展
+		var pulse_p := clampf(p * 1.2, 0.0, 1.0)
+		var ground_r := 22.0 + pulse_p * 54.0
+		var ground_a := (1.0 - pulse_p) * 0.55
+		if ground_a > 0.02:
+			BatchDraw.native_arc(self, Vector2.ZERO, ground_r, 0.0, TAU, 32,
+				Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, ground_a), 1.8, true)
 
-	# 莲瓣角标
-	for i in range(8):
-		var la := float(i) * (TAU / 8.0) + p * 0.8
-		var lp := Vector2(cos(la), sin(la)) * r
-		BatchDraw.circle(self, lp, maxf(1.0, 2.8 * (1.0 - p * 0.5)), GameStyle.FX_HDR_CORE, 3.2)
-	BatchDraw.flush(self)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		# 莲瓣角标
+		for i in range(8):
+			var la := float(i) * (TAU / 8.0) + p * 0.8
+			var lp := Vector2(cos(la), sin(la)) * r
+			BatchDraw.circle(self, lp, maxf(1.0, 2.8 * (1.0 - p * 0.5)), GameStyle.FX_HDR_CORE, 3.2)
+		BatchDraw.flush(self)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 2. 空洞骑士 Focus 式：灵光自四周外圈向角色身躯中心螺旋汇聚
 	for pt in renewal_particles:
