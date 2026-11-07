@@ -658,7 +658,7 @@ func _build_enemies_page(parent: Control) -> Control:
 	_enemies_box = _new_scroll_vbox(scroll)
 	return scroll
 
-## 分组重建：常规妖物（12 种）→ 精英劫（3 种）→ 魔君 → 金蟾。未遭遇的种灰显「未收录」，
+## 分组重建：常规妖物（14 种）→ 精英劫（6 种）→ 魔君 → 金蟾。未遭遇的种灰显「未收录」，
 ## 与道具页同款待遇；收录口径 = 实战里刷出过（EnemyCodex），追不上的金蟾也算。
 ## 图标现渲捕获（EnemyIconCapture）：先铺占位，捕完逐张回填，页不卡在建图上。
 func _rebuild_enemies_page() -> void:

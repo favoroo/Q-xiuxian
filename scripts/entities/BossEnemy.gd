@@ -51,7 +51,8 @@ enum Pattern {
 
 @export var boss_id: String = ""
 @export var boss_title: String = "敌潮Boss"
-@export var final_boss: bool = false      ## 第 20 波魔尊：换紫皮、放大身形、全招式全开
+@export var final_boss: bool = false      ## 魔尊身份位（W20 起恒真）：紫皮/渲染雾场/攻击身份表取 FINAL 变体
+@export var deep_boss: bool = false       ## 深层规格位（W25+ 恒真）：FINAL 弹幕规格延迟到狂暴兑现，避免一阶段即满配
 @export var attack_interval: float = GameBalance.BOSS_ATTACK_INTERVAL  ## 特殊攻击循环间隔
 
 var _attack_timer: float = 2.4    ## 开场缓冲，让玩家先看清魔君登场
@@ -966,7 +967,7 @@ func _tick_spiral(delta: float) -> void:
 	velocity = Vector2.ZERO
 	if _spiral_step_timer <= 0.0:
 		_spiral_step_timer = GameBalance.BOSS_SPIRAL_INTERVAL
-		var arms := GameBalance.BOSS_SPIRAL_ARMS_FINAL if (final_boss or _phase2) else GameBalance.BOSS_SPIRAL_ARMS
+		var arms := GameBalance.BOSS_SPIRAL_ARMS_FINAL if _final_spec() else GameBalance.BOSS_SPIRAL_ARMS
 		var dmg := maxf(1.0, contact_damage * GameBalance.BOSS_SPIRAL_DMG_MULT)
 		for arm in range(arms):
 			var arm_ang := _spiral_angle + TAU * float(arm) / float(arms)
@@ -986,7 +987,7 @@ func _tick_spiral(delta: float) -> void:
 # ---------------- 招式 4：分裂子母弹 ----------------
 
 func _cast_split_bomb(player: Node2D) -> void:
-	var count := GameBalance.BOSS_SPLIT_BOMB_COUNT_FINAL if (final_boss or _phase2) else GameBalance.BOSS_SPLIT_BOMB_COUNT
+	var count := GameBalance.BOSS_SPLIT_BOMB_COUNT_FINAL if _final_spec() else GameBalance.BOSS_SPLIT_BOMB_COUNT
 	var to_p: Vector2 = player.global_position - global_position
 	var base_dir: Vector2 = to_p.normalized() if to_p.length_squared() > 1.0 else Vector2.RIGHT
 	var base_ang := base_dir.angle()
@@ -1025,7 +1026,7 @@ func _cast_charge(player: Node2D) -> void:
 	charge_interval = 999999.0
 	_update_charge_warning(player)
 	play_squash(Vector2(1.22, 0.78), GameBalance.BOSS_CHARGE_WINDUP)
-	AudioManager.play_sfx("enemy_fuse", 0.7)
+	_warn_sfx(0.7)
 
 func _start_charge(dir: Vector2) -> void:
 	if _dive_pending:
@@ -1065,7 +1066,7 @@ func _settle_charge_recovery() -> void:
 	if was_dive:
 		_settle_dive()
 	super._settle_charge_recovery()
-	if (_phase2 or final_boss) and not was_dive:  # 俯冲已有落点环爆，不再叠通用收势环
+	if _final_spec() and not was_dive:  # 俯冲已有落点环爆，不再叠通用收势环
 		_fire_mini_ring(8, 255.0, 1.1)
 	if _chain_charges_left > 0:
 		_chain_charges_left -= 1
@@ -1079,7 +1080,7 @@ func _settle_charge_recovery() -> void:
 			_charge_windup_total = gap
 			_update_charge_warning(p)
 			play_squash(Vector2(1.22, 0.78), gap)
-			AudioManager.play_sfx("enemy_fuse", 0.7)
+			_warn_sfx(0.7)
 			if _chain_charges_left == 0:
 				charge_whiff_stagger = 0.55
 	else:
@@ -1104,7 +1105,7 @@ func apply_vortex_pin(pull_velocity: Vector2, pin_sec: float) -> void:
 # ---------------- 招式 9：多段折返连冲 ----------------
 
 func _cast_chain_charge(player: Node2D) -> void:
-	var total_cnt: int = GameBalance.BOSS_CHAIN_CHARGE_COUNT_P2 if (_phase2 or final_boss) else GameBalance.BOSS_CHAIN_CHARGE_COUNT
+	var total_cnt: int = GameBalance.BOSS_CHAIN_CHARGE_COUNT_P2 if _final_spec() else GameBalance.BOSS_CHAIN_CHARGE_COUNT
 	_chain_charges_left = maxi(1, total_cnt) - 1
 	charge_whiff_stagger = 0.55 if _chain_charges_left == 0 else 0.0
 	_cast_charge(player)
@@ -1177,7 +1178,7 @@ func _tick_sky_fires(delta: float, player: Node2D) -> void:
 				"windup": windup,
 				"pos": strike_pos
 			})
-			AudioManager.play_sfx("enemy_fuse", 0.6)
+			_warn_sfx(0.6)
 
 	var i := 0
 	while i < _active_sky_fires.size():
@@ -1219,7 +1220,7 @@ func _cast_slam() -> void:
 	_style_telegraph(_slam_ring)
 	_slam_ring.progress = 0.0
 	_slam_ring.visible = true
-	AudioManager.play_sfx("enemy_fuse", 0.7)
+	_warn_sfx(0.7)
 	play_squash(Vector2(0.82, 1.2), 0.4)
 
 func _resolve_slam(player: Node2D = null) -> void:
@@ -1239,7 +1240,7 @@ func _resolve_slam(player: Node2D = null) -> void:
 		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_SLAM_DMG_MULT), global_position)
 		GameManager.trigger_screen_shockwave(player.global_position)
 	# 二阶段或魔尊：震地炸裂顺发 12 颗外散冲击火球
-	if _phase2 or final_boss:
+	if _final_spec():
 		_fire_mini_ring(12, 280.0, 1.2)
 
 # ---------------- 招式 8：召唤妖群 + 弹幕掩护 ----------------
@@ -1310,7 +1311,7 @@ func _fire_cover_spread(player: Node2D) -> void:
 # ---------------- 招式 11：连环禁区封锁 ----------------
 
 func _cast_hazard_field(player: Node2D) -> void:
-	_hazard_fields_left = GameBalance.BOSS_HAZARD_FIELD_COUNT_P2 if (_phase2 or final_boss) else GameBalance.BOSS_HAZARD_FIELD_COUNT
+	_hazard_fields_left = GameBalance.BOSS_HAZARD_FIELD_COUNT_P2 if _final_spec() else GameBalance.BOSS_HAZARD_FIELD_COUNT
 	_hazard_spawn_timer = 0.0
 	play_squash(Vector2(0.9, 1.2), 0.3)
 	_pose_burst()
@@ -1321,7 +1322,7 @@ func _tick_hazard_fields(delta: float, player: Node2D) -> void:
 		if _hazard_spawn_timer <= 0.0:
 			_hazard_spawn_timer = 0.18
 			_hazard_fields_left -= 1
-			var total_cnt: int = GameBalance.BOSS_HAZARD_FIELD_COUNT_P2 if (_phase2 or final_boss) else GameBalance.BOSS_HAZARD_FIELD_COUNT
+			var total_cnt: int = GameBalance.BOSS_HAZARD_FIELD_COUNT_P2 if _final_spec() else GameBalance.BOSS_HAZARD_FIELD_COUNT
 			var idx: int = total_cnt - _hazard_fields_left
 			var p_pos := player.global_position if (player != null and is_instance_valid(player)) else global_position
 			var p_vel: Vector2 = player.velocity if (player is CharacterBody2D) else Vector2.ZERO
@@ -1353,7 +1354,7 @@ func _tick_hazard_fields(delta: float, player: Node2D) -> void:
 				"windup": windup,
 				"pos": target_pos
 			})
-			AudioManager.play_sfx("enemy_fuse", 0.6)
+			_warn_sfx(0.6)
 
 	var i := 0
 	while i < _active_hazard_fields.size():
@@ -1415,7 +1416,7 @@ func _cast_blink_slash(player: Node2D, windup: float = -1.0) -> void:
 func _fire_blink_slash_fan(player: Node2D) -> void:
 	if dying or get_parent() == null or player == null or not is_instance_valid(player):
 		return
-	var bolts_count: int = GameBalance.BOSS_BLINK_SLASH_BOLTS_P2 if (_phase2 or final_boss) else GameBalance.BOSS_BLINK_SLASH_BOLTS
+	var bolts_count: int = GameBalance.BOSS_BLINK_SLASH_BOLTS_P2 if _final_spec() else GameBalance.BOSS_BLINK_SLASH_BOLTS
 	var to_p: Vector2 = (player.global_position - global_position).normalized()
 	var base_ang := to_p.angle()
 	var spread: float = GameBalance.BOSS_BLINK_SLASH_SPREAD
@@ -1475,7 +1476,7 @@ func _on_dive_arrive(player: Node2D) -> void:
 	_charge_timer = 999999.0
 	charge_interval = 999999.0
 	_update_charge_warning(player)
-	AudioManager.play_sfx("enemy_fuse", 0.9, 0.85)
+	_warn_sfx(0.9)
 	_pose_burst()
 
 ## 俯冲换位锚点：优先「玩家 + 远离方向 × 380」，被墙钳回时依次尝试对侧/切向，
@@ -1511,7 +1512,7 @@ func _settle_dive() -> void:
 	_restore_charge_params()
 	if dying or get_parent() == null:
 		return
-	var ring_count: int = GameBalance.BOSS_DIVE_LAND_RING_P2 if (_phase2 or final_boss) else GameBalance.BOSS_DIVE_LAND_RING
+	var ring_count: int = GameBalance.BOSS_DIVE_LAND_RING_P2 if _final_spec() else GameBalance.BOSS_DIVE_LAND_RING
 	_fire_mini_ring(ring_count, 260.0, 1.2)
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, 90.0, _fx_color, 0.3)
 	GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.CRACK, 70.0)
@@ -1544,7 +1545,7 @@ func _cast_mirror_flank(player: Node2D) -> void:
 	_mirror_telegraph.progress = 0.0
 	_mirror_telegraph.visible = true
 	JuiceEffect.spawn_shockwave(get_parent(), phantom, 72.0, _fx_color, 0.3)
-	AudioManager.play_sfx("enemy_fuse", 0.7, 1.2)
+	_warn_sfx(0.7)
 	play_squash(Vector2(1.05, 0.9), 0.3)
 
 func _resolve_mirror_flank(player: Node2D) -> void:
@@ -1592,7 +1593,7 @@ func _cast_soul_tide(player: Node2D) -> void:
 	_soul_telegraph.progress = 0.0
 	_soul_telegraph.visible = true
 	JuiceEffect.spawn_shockwave(get_parent(), _soul_center, 120.0, _fx_color, 0.35)
-	AudioManager.play_sfx("enemy_fuse", 0.7, 0.9)
+	_warn_sfx(0.7)
 
 func _resolve_soul_tide(player: Node2D) -> void:
 	_soul_pending = false
@@ -1635,7 +1636,7 @@ func _cast_furnace_blast(player: Node2D) -> void:
 	_style_telegraph(_furnace_ring)
 	_furnace_ring.progress = 0.0
 	_furnace_ring.visible = true
-	AudioManager.play_sfx("enemy_fuse", 0.9, 0.7)
+	_warn_sfx(0.9)
 	play_squash(Vector2(0.85, 1.15), 0.4)
 
 func _resolve_furnace(player: Node2D) -> void:
@@ -1687,8 +1688,8 @@ func _fire_furnace_ring(spd: float, dmg: float, layer: int) -> void:
 func _cast_laser_sweep(player: Node2D) -> void:
 	if dying or get_parent() == null or player == null or not is_instance_valid(player):
 		return
-	var count: int = GameBalance.BOSS_LASER_BEAMS_P2 if (_phase2 or final_boss) else GameBalance.BOSS_LASER_BEAMS
-	var sweep: float = GameBalance.BOSS_LASER_SWEEP_ANG if (_phase2 or final_boss) else 0.0
+	var count: int = GameBalance.BOSS_LASER_BEAMS_P2 if _final_spec() else GameBalance.BOSS_LASER_BEAMS
+	var sweep: float = GameBalance.BOSS_LASER_SWEEP_ANG if _final_spec() else 0.0
 	var to_p: Vector2 = player.global_position - global_position
 	var base_dir: Vector2 = to_p.normalized() if to_p.length_squared() > 1.0 else Vector2.RIGHT
 	var dmg := maxf(1.0, contact_damage * GameBalance.BOSS_LASER_DMG_MULT)
@@ -1698,7 +1699,7 @@ func _cast_laser_sweep(player: Node2D) -> void:
 	_laser_total = GameBalance.BOSS_LASER_CHARGE + GameBalance.BOSS_LASER_FIRE + GameBalance.BOSS_LASER_FADE
 	_laser_timer = _laser_total
 	_laser_beams.clear()
-	AudioManager.play_sfx("enemy_fuse", 0.9, 0.8)
+	_warn_sfx(0.9)
 	# 扇心正对玩家、束间等角张开：中间那条能贴身穿缝，两侧是墙
 	for i in range(count):
 		var offset := (float(i) - float(count - 1) * 0.5) * GameBalance.BOSS_LASER_FAN_STEP
@@ -1745,7 +1746,7 @@ func _cast_flame_cone(player: Node2D) -> void:
 	_flame_cone.rotation = _flame_dir
 	_flame_pending = true
 	play_squash(Vector2(0.9, 1.15), 0.35)
-	AudioManager.play_sfx("enemy_fuse", 0.8, 0.9)
+	_warn_sfx(0.8)
 	_play_cast_fx()
 
 func _tick_flame_cone(delta: float, player: Node2D) -> void:
@@ -1775,7 +1776,7 @@ func _tick_flame_cone(delta: float, player: Node2D) -> void:
 				"modulate": _fx_color.lerp(Color.WHITE, 0.6),
 			})
 			AudioManager.play_sfx("enemy_slam", 0.6, 1.25)
-			AudioManager.play_sfx("enemy_fuse", 0.5, 1.3)
+			_warn_sfx(0.5)
 			GameManager.add_trauma(0.08)
 		return
 
@@ -1837,7 +1838,7 @@ func _resolve_flame_cone() -> void:
 func _cast_meteor_strike(player: Node2D) -> void:
 	if dying or get_parent() == null:
 		return
-	var count: int = GameBalance.BOSS_METEOR_COUNT_P2 if (_phase2 or final_boss) else GameBalance.BOSS_METEOR_COUNT
+	var count: int = GameBalance.BOSS_METEOR_COUNT_P2 if _final_spec() else GameBalance.BOSS_METEOR_COUNT
 	var anchor: Vector2 = global_position
 	var run_dir := Vector2.RIGHT
 	var p_vel := Vector2.ZERO
@@ -1858,7 +1859,7 @@ func _cast_meteor_strike(player: Node2D) -> void:
 			old.recycle()
 	_active_meteors.clear()
 	play_squash(Vector2(0.95, 1.15), 0.3)
-	AudioManager.play_sfx("enemy_fuse", 0.85, 0.75)
+	_warn_sfx(0.85)
 	for i in range(count):
 		var pos: Vector2
 		if i == 0:
@@ -2041,7 +2042,7 @@ func _sig_sword_rain(player: Node2D, def: Dictionary) -> void:
 	var dmg := maxf(1.0, contact_damage * float(def.get("dmg_mult", 0.55)))
 	var center := player.global_position
 	play_squash(Vector2(0.9, 1.2), 0.3)
-	AudioManager.play_sfx("enemy_fuse", 0.8, 1.1)
+	_warn_sfx(0.8)
 	_spawn_windup_telegraph(center, radius, float(def.get("windup", 0.55)), func():
 		if dying or get_parent() == null:
 			return
@@ -2208,6 +2209,16 @@ func _sig_tribulation(player: Node2D, def: Dictionary) -> void:
 	play_squash(Vector2(1.2, 0.8), 0.35)
 
 # ---------------- 二阶段与死亡结算 ----------------
+
+## FINAL 弹幕规格是否生效：狂暴后全员兑现；仅破境魔尊（final_boss 且非深层）开场即满配。
+## 深层魔君一阶段回落基础规格——否则一阶段就是满配，「◆ 狂暴形态 ◆」公告时强度不跳变，阶段感形同虚设。
+func _final_spec() -> bool:
+	return _phase2 or (final_boss and not deep_boss)
+
+## Boss 大招预警音：与小怪共用 enemy_fuse 音色但压到低音带——
+## 低八度长嘶让「魔尊起手」闭眼也能与小怪蓄力区分；音量沿用各招原值。
+func _warn_sfx(vol: float) -> void:
+	AudioManager.play_sfx("enemy_fuse", vol, 0.6)
 
 func _enter_phase2() -> void:
 	_phase2 = true

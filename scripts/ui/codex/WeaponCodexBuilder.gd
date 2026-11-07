@@ -51,12 +51,15 @@ static func rebuild(dialog: ManualDialog) -> void:
 	var cls_tag := dialog.weapon_class_filter
 	var elem_tag := dialog.weapon_element_filter
 	if cls_tag == "" and elem_tag == "":
+		# 规则卡文案唯一真话在 ManualData.WEAPON_RULE_BODY（TextStyleCheck 语料同源），
+		# 这里只格式化数值并追加收录进度行，别再手抄一份。
+		var rule_body: String = ManualData.WEAPON_RULE_BODY % [
+			WeaponData.MAX_SLOTS, WeaponData.MAX_STASH_SLOTS,
+			String.num(WeaponData.STAR_DAMAGE_MULT, 1), String.num(WeaponData.STAR_COOLDOWN_MULT, 2),
+			WeaponData.MAX_STAR]
 		box.add_child(dialog._make_text_card("武器规则",
-			"武器只能在回合间商店购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n★3 觉醒专属招式，★4 再跃一档「极境」；手里有同名武器时货架更容易刷出它。\n点任意武器卡看射程、冷却与属性受益。\n已收录 %d/%d 把：没用过的武器只显示名字，买一次即可点亮。" % [
-				WeaponData.MAX_SLOTS, WeaponData.MAX_STASH_SLOTS,
-				String.num(WeaponData.STAR_DAMAGE_MULT, 1), String.num(WeaponData.STAR_COOLDOWN_MULT, 2),
-				WeaponData.MAX_STAR,
-				CodexCollection.weapon_seen_count(), WeaponData.DEFS.size()]))
+			rule_body + ("\n已收录 %d/%d 把：没用过的武器只显示名字，买一次即可点亮。" % [
+				CodexCollection.weapon_seen_count(), WeaponData.DEFS.size()])))
 		for elem in WeaponData.ELEMENTS:
 			box.add_child(_group_header(
 				"── %s行武器 ──" % String(StatInfoData.ELEMENT_NAMES.get(elem, elem)),

@@ -75,7 +75,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	sep1.add_theme_stylebox_override("separator", _create_line_style(GameStyle.LINE))
 	vbox.add_child(sep1)
 
-	# 主要属性页（15 行，加上顶端常驻生命共 16 项）——按 攻击/生存/机动 分三块
+	# 主要属性页（16 行，加上顶端常驻生命共 17 项）——按 攻击/生存/机动 分三块
 	dialog._primary_stats_box = VBoxContainer.new()
 	dialog._primary_stats_box.add_theme_constant_override("separation", 2)
 	dialog._primary_stats_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -103,7 +103,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	dialog._luck_val_lbl = add_stat_row(dialog, util_block, "luck", "0")
 	dialog._harvest_val_lbl = add_stat_row(dialog, util_block, "harvest", "0")
 
-	# 次要属性页（9 行）——按 战斗/成长/经营 分三块
+	# 次要属性页（8 行）——按 战斗/成长/经营 分三块
 	dialog._secondary_stats_box = VBoxContainer.new()
 	dialog._secondary_stats_box.add_theme_constant_override("separation", 2)
 	dialog._secondary_stats_box.size_flags_vertical = Control.SIZE_EXPAND_FILL

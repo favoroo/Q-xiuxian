@@ -180,7 +180,7 @@ const GUIDE: Dictionary = {
 	},
 	# —— 魔君 ——
 	"boss": {
-		"desc": "镇守十波大关与深层的诸天魔君（赤炎、修罗、千机、万蛊、剑魄、心魔），各有专属杀招与【半血狂暴】质变。",
+		"desc": "镇守大关与深层的诸天魔君，越深处杀招越刁钻，人人有【半血狂暴】质变。",
 		"tags": ["Boss", "狂暴"],
 		"attack": "多段招式·狂暴",
 		"tough": "极厚",
@@ -226,7 +226,7 @@ static func first_seen_text(eid: String) -> String:
 		var w := int(EnemyData.MOBS[eid].get("unlock_wave", 1))
 		return "出没：第 %d 波起" % w if w > 1 else "出没：第 1 波起"
 	if eid in ["golem", "chilei", "jiansha", "xuanming", "xingpan", "wandu"]:
-		return "出没：第 5 / 15 波起 精英劫"
+		return "出没：第 5 / 15 波起 精英劫，20 波后逢波必遇"
 	if eid == "boss":
 		return "出没：第 10 / 20 波，之后每 5 波"
 	if eid == "jinchan":

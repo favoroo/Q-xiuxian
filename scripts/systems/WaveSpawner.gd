@@ -1056,6 +1056,9 @@ func _spawn_boss(player: Node2D, is_secondary: bool = false) -> void:
 		boss.attack_interval = base_interval * GameBalance.enemy_attack_cd_mult(wave_number) * GameBalance.danger_attack_cd_mult(GameManager.danger_level)
 		boss.bolt_speed_mult = GameBalance.enemy_bolt_speed_mult(wave_number) * GameBalance.danger_bolt_speed_mult(GameManager.danger_level)
 		boss.final_boss = (wave_number >= GameManager.MILESTONE_WAVE)
+		# 规格位与身份位分离（2026-11-07）：深层魔君一阶段回落基础弹幕规格，FINAL 规格等狂暴兑现，
+		# 否则 W25+ 一阶段即满配，「◆ 狂暴形态 ◆」没有强度跳变（W20 破境魔尊仍开场满配）。
+		boss.deep_boss = (wave_number > GameManager.MILESTONE_WAVE)
 		boss.boss_title = _boss_title_for_id(bid)
 		_boss_ref = boss
 		parent.add_child(boss)

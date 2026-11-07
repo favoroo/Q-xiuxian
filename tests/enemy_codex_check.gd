@@ -4,14 +4,14 @@ extends Node
 ##
 ## 为什么这几枪必须打在真链路上：
 ##  ① catalog 与 EnemyData 对账：改表加怪忘进图鉴（或反过来）都是「图鉴撒谎」，
-##     表序切片（常规 11 / 精英 3）写死在 ManualDialog 分组里，两边必须同时钉住。
+##     表序切片（常规 14 / 精英 6）写死在 ManualDialog 分组里，两边必须同时钉住。
 ##  ② 存档往返走真 ConfigFile 读盘：record_seen 写的是 user://codex.cfg，
 ##     只量内存数组等于没量持久化 —— 关游戏丢收录是最蠢的回归。
 ##     跑本判据会清 user://codex.cfg（reset_for_test），真机收录会被抹掉，开发者知悉即可。
 ##  ③ 四路埋点走真 WaveSpawner：常规口在派发时记 key（不是落地 callback，预警亮起即遭遇），
 ##     精英/魔君/金蟾各一记 —— 任何一路接线断了，那一种就永远进不了图鉴。
 ##  ④ 建卡走真 ManualDialog._rebuild_enemies_page：headless 无真渲染，图标捕到 null 是预期，
-##     但 16 张卡、分组标题、未遭遇灰显必须立得住（灰显与遭遇判据同源 EnemyCodex）。
+##     但 22 张卡、分组标题、未遭遇灰显必须立得住（灰显与遭遇判据同源 EnemyCodex）。
 ##  ⑤ 图标捕获去重：同一 eid 并发两枪只许建一个宿主（_pending 闸），捕完缓存命中同对象。
 ##
 ## 运行: $G --headless --path . res://tests/EnemyCodexCheck.tscn

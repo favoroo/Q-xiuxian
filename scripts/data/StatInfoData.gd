@@ -165,7 +165,7 @@ const BRIEF: Dictionary = {
 	"crit": "暴击的概率与倍率。",
 	"luck": "提高高稀有度升级与道具的出现概率。",
 	"harvest": "每回合结束白得金币与经验，且有复利增长。",
-	"xp_gain": "每颗经验光球提供的经验倍率。",
+	"xp_gain": "光球与回合末收益的经验倍率。",
 	"shop_price": "商店商品的物价折算。",
 	"bonus_pierce": "远程与机关武器的额外穿透次数。",
 	"thorns": "受到近身攻击时，按比例反弹伤害给敌方。",
@@ -253,7 +253,7 @@ static func rules(id: String) -> Array[String]:
 		"haste":
 			out.append("按乘算叠：每层各乘一次，不是百分比相加。")
 			out.append("下限 ×%s，到底不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
-			out.append("-12% 与 -14% 叠起来是 -23%，不是 -26%。")
+			out.append("-12% 与 -8% 叠起来是 -19%，不是 -20%。")
 		"speed":
 			out.append("实际移速 = 角色基础 × (1 + 加成与羁绊)。")
 			out.append("负面代偿也乘在这条上，读数可能是负的。")
@@ -271,22 +271,22 @@ static func rules(id: String) -> Array[String]:
 			out.append("各有上限，堆极高后收益停住。")
 			out.append("对货架与悟道同时生效，只提概率不保出。")
 		"harvest":
-			out.append("回合末等额发放：收益 8 ＝ 金币与经验各 +8。")
+			out.append("回合末等额发放：收益 8 ＝ 金币与经验各 +8（经验另乘经验获取倍率）。")
 			out.append("每回合复利 ×%s，第 %d 波封顶。" % [
 				_fmt(GameBalance.HARVEST_GROWTH), GameManager.HARVEST_GROWTH_WAVE_CAP])
 			out.append("收益高＝升级快。")
 		"xp_gain":
-			out.append("只放大经验光球，不影响金币。")
+			out.append("只放大经验入账（光球、回合末收益），不影响金币。")
 			out.append("「经验加成」与「经验石」提供。")
 		"shop_price":
 			out.append("全店价格的折算比例。")
 			out.append("角色八折、道具「折扣券」可再叠。")
 		"bonus_pierce":
 			out.append("飞剑飞符等远程弹丸与机关的额外穿透。")
-			out.append("弹射羁绊核心收益，可叠「穿透强化」「破虚符」。")
+			out.append("弹射羁绊恒定 +1，可叠「穿透强化」「破虚符」。")
 		"thorns":
 			out.append("近身碰撞掉血时，按比例反弹伤害。")
-			out.append("守卫自带，「护体罡气」「反震铜甲」可叠。")
+			out.append("守卫自带，土系羁绊、「护体罡气」「反震铜甲」可叠。")
 		"elite_dmg":
 			out.append("对精英与 Boss 的独立乘区。")
 			out.append("不影响小怪。")
@@ -572,6 +572,7 @@ static func stat_tip_rows(id: String) -> Array:
 			var tp: float = float(s.get("thorns_pct", 0.0))
 			rows = [
 				["反震伤害比例", "%.0f%%" % tp, _c(tp)],
+				["土系羁绊", "+%.0f%%" % (GameManager.synergy_thorns * 100.0), _c(GameManager.synergy_thorns)],
 				["触发时机", "受到敌方近身碰撞掉血时"],
 			]
 		"elite_dmg":

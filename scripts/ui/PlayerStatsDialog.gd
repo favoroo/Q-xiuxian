@@ -20,7 +20,7 @@ var _primary_stats_box: VBoxContainer
 var _secondary_stats_box: VBoxContainer
 var _current_stat_tab: int = 0 # 0 = 主要, 1 = 次要
 
-# 左侧属性节点（主要 16 项 + 次要 9 项 = 25 项）
+# 左侧属性节点（主要 17 项 + 次要 8 项 = 25 项）
 var _hp_bar: ProgressBar
 var _hp_val_lbl: Label
 var _regen_val_lbl: Label
