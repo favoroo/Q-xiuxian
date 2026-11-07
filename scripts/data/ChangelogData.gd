@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.27",
+			"date": "2026-11-07",
+			"title": "雷电缠身",
+			"items": [
+				"紫电与连锁雷电紧贴敌人，不再飘在空气里。",
+				"雷灵雀的神雷跟着敌人走，指哪打哪。",
+				"血祭代价改为消耗80%生命。",
+				"闪避后眼睛不再发光。",
+			],
+		},
+		{
 			"version": "v0.1.26",
 			"date": "2026-11-07",
 			"title": "特效精简焕新",
